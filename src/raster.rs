@@ -1,6 +1,3 @@
-use std::fs::File;
-use std::io::Write;
-
 use pyo3::{exceptions::PyValueError, prelude::*};
 use image::{GrayImage, Luma};
 
@@ -37,6 +34,7 @@ fn coordinates_to_image(width: u32, height: u32, coords: &[Coordinate]) -> GrayI
 }
 
 
+#[expect(unused)]
 fn coordinates_to_vec_vec(width: u32, height: u32, coords: &[Coordinate]) -> Vec<Vec<f32>> {
     // Create a 2D vector of size height x width, initialized with 0.0 (black).
     let mut image_vec = vec![vec![0.0f32; width as usize]; height as usize];
@@ -107,19 +105,14 @@ pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType)
     println!("Sampled down to {} coordinates using a grid.", sampled_coords.len());
 
     // 4. Turn the sampled coordinates back into an image
-    let output_img = coordinates_to_vec_vec(
+    let output_img = coordinates_to_image(
         source_img.width(),
         source_img.height(),
         &sampled_coords,
     );
 
-    let mut file = File::create("output/img.png")?;
-    writeln!(&mut file, "P3\n{} {}\n255", source_img.width(), source_img.height())?;
-
-    // as in rtiaw, just read from the nested vec to write pixel values, guaranteed to be the same
-    // size and shape anyway
-
-    Ok(())
-
-
+    match output_img.save("output/img.png") {
+        Ok(_) => Ok(()),
+        Err(e) => Err(PyValueError::new_err(format!("Unable to create file in path 'output/img.png': {}", e)))
+    }
 }
