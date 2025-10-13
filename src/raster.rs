@@ -77,7 +77,7 @@ impl FromPyObject<'_> for SamplingType {
 ///     input_path: path to source image
 ///     n: number of pixels
 ///     threshold: brightness threshold that gets counted as a 'white' pixel
-///     sample: selecting type of sampling, either 'grid' or 'farthest'
+///     sample: selecting type of sampling, either 'grid' or 'farthest'. Defaults to 'farthest'
 ///     img_type: selecting type of image, either 'black_on_white' or 'white_on_black'. Defaults to 'black_on_white'
 ///     resize: resizing 
 ///     output_path: path where the output coordinates image will be saved. Note that, if the intermediate directories do not exist, they will be created. Defaults to 'output/coordinates.png'
