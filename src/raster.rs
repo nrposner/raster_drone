@@ -50,10 +50,9 @@ fn coordinates_to_vec_vec(width: u32, height: u32, coords: &[Coordinate]) -> Vec
     image_vec
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub enum SamplingType {
     Grid,
-    #[default]
     Farthest,
 }
 
@@ -71,25 +70,37 @@ impl FromPyObject<'_> for SamplingType {
     }
 }
 
-#[pyfunction(signature=(path, n, threshold, sample=SamplingType::Farthest, img_type=ImgType::BlackOnWhite))]
+#[pyfunction(signature=(input_path, n, threshold, sample=SamplingType::Farthest, img_type=ImgType::BlackOnWhite, resize=Some((256, 256)), output_path="output/coordinates.png"))]
 /// Processes a black and white image into a sample of coordinate pixels
 ///
 /// Arguments:
-///     path: path to source image
+///     input_path: path to source image
 ///     n: number of pixels
 ///     threshold: brightness threshold that gets counted as a 'white' pixel
 ///     sample: selecting type of sampling, either 'grid' or 'farthest'
-///     img_type: selecting type of image, either 'black_on_white' or 'white_on_black'. Defaults to
-///     'black_on_white'
-pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType, img_type: ImgType) -> PyResult<()> {
-    let source_img = match image::open(path) {
+///     img_type: selecting type of image, either 'black_on_white' or 'white_on_black'. Defaults to 'black_on_white'
+///     resize: resizing 
+///     output_path: path where the output coordinates image will be saved. Note that, if the intermediate directories do not exist, they will be created. Defaults to 'output/coordinates.png'
+///
+pub fn process_image(
+    input_path: String, 
+    n: u32, 
+    threshold: f32, 
+    sample: SamplingType, 
+    img_type: ImgType,
+    resize: Option<(u32, u32)>,
+    output_path: &str,
+) -> PyResult<()> {
+    let source_img = match image::open(input_path) {
         Ok(img) => img,
         Err(e) => {
             return Err(PyValueError::new_err(format!("Error loading image: {:?}", e)))
         }
     };
 
-    let img = source_img.thumbnail(256, 256);
+    let img = if let Some((width, height)) = resize {
+        source_img.thumbnail(width, height)
+    } else { source_img };
 
     println!("Image loaded successfully with dimensions: {}x{}", img.width(), img.height());
 
@@ -117,7 +128,13 @@ pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType,
         &sampled_coords,
     );
 
-    match output_img.save("output/img.png") {
+    // creating intermediate directories if necessary
+    let path = std::path::Path::new(output_path);
+    if let Some(prefix) = path.parent() {
+        std::fs::create_dir_all(prefix).unwrap();
+    }
+
+    match output_img.save(output_path) {
         Ok(_) => Ok(()),
         Err(e) => Err(PyValueError::new_err(format!("Unable to create file in path 'output/img.png': {}", e)))
     }
