@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::io::Write;
+
 use pyo3::{exceptions::PyValueError, prelude::*};
 use image::{GrayImage, Luma};
 
@@ -74,8 +77,9 @@ impl FromPyObject<'_> for SamplingType {
 
 }
 
+// pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType) -> PyResult<Vec<Vec<f32>>> {
 #[pyfunction]
-pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType) -> PyResult<Vec<Vec<f32>>> {
+pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType) -> PyResult<()> {
     let source_img = match image::open(path) {
         Ok(img) => img,
         Err(e) => {
@@ -109,5 +113,13 @@ pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType)
         &sampled_coords,
     );
 
-    Ok(output_img)
+    let mut file = File::create("output/img.png")?;
+    writeln!(&mut file, "P3\n{} {}\n255", source_img.width(), source_img.height())?;
+
+    // as in rtiaw, just read from the nested vec to write pixel values, guaranteed to be the same
+    // size and shape anyway
+
+    Ok(())
+
+
 }
