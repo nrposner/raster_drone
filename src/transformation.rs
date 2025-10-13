@@ -1,6 +1,25 @@
+use pyo3::{exceptions::PyValueError, prelude::*};
 use crate::utils::Coordinate;
 use image::{DynamicImage, GenericImageView};
 
+pub enum ImgType {
+    BlackOnWhite,
+    WhiteOnBlack,
+}
+
+impl FromPyObject<'_> for ImgType {
+    fn extract_bound(ob: &Bound<'_, PyAny>) -> PyResult<Self> {
+        if let Ok(s) = ob.extract::<&str>() {
+            match s.to_lowercase().as_str() {
+                "black_on_white" => Ok(Self::BlackOnWhite),
+                "white_on_black" => Ok(Self::WhiteOnBlack),
+                _ => Err(PyValueError::new_err("The valid values for 'img_type' are 'black_on_white' and 'white_on_black'."))
+            }
+        } else {
+            Ok(Self::BlackOnWhite)
+        }
+    }
+}
 /// Extracts pixel coordinates from an image based on a brightness percentile.
 ///
 /// # Arguments
@@ -9,7 +28,7 @@ use image::{DynamicImage, GenericImageView};
 ///
 /// # Returns
 /// A `Vec<Coordinate>` containing the coordinates of the selected pixels.
-pub fn image_to_coordinates(img: &DynamicImage, percentile: f32) -> Vec<Coordinate> {
+pub fn image_to_coordinates(img: &DynamicImage, percentile: f32, img_type: ImgType) -> Vec<Coordinate> {
     // Clamp the percentile to a valid range [0.0, 1.0].
     let percentile = percentile.clamp(0.0, 1.0);
 
@@ -36,8 +55,13 @@ pub fn image_to_coordinates(img: &DynamicImage, percentile: f32) -> Vec<Coordina
     // --- Sort and Select ---
 
     // Sort the pixels by brightness in descending order (brightest first).
-    // We use `partial_cmp` for f32 and reverse the comparison to get descending order.
-    pixel_brightness_data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    // if the desired lines are black on white, we sort normally,
+    // if white on black, then we need to reverse the comparison
+    match img_type {
+        ImgType::BlackOnWhite => pixel_brightness_data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap()),
+        ImgType::WhiteOnBlack => pixel_brightness_data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap()),
+    }
+    // pixel_brightness_data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
     // Calculate how many pixels to take based on the percentile.
     let total_pixels = pixel_brightness_data.len();

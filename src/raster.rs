@@ -2,7 +2,7 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 use image::{GrayImage, Luma};
 
 use crate::utils::Coordinate;
-use crate::transformation::image_to_coordinates;
+use crate::transformation::{image_to_coordinates, ImgType};
 use crate::sampling::{farthest_point_sampling, grid_sampling};
 
 /// Creates a new black and white image from a list of coordinates.
@@ -52,8 +52,8 @@ fn coordinates_to_vec_vec(width: u32, height: u32, coords: &[Coordinate]) -> Vec
 
 #[derive(Default, Clone, Copy)]
 pub enum SamplingType {
-    #[default]
     Grid,
+    #[default]
     Farthest,
 }
 
@@ -66,18 +66,22 @@ impl FromPyObject<'_> for SamplingType {
                 _ => Err(PyValueError::new_err("The valid values for `sampling` include 'grid' and 'farthest'."))
             }
         } else {
-            Ok(Self::Grid)
+            Ok(Self::Farthest)
         }
-        
     }
-
-    // fn extract_bound(&pyo3::Bound<'py, pyo3::PyAny>) -> std::result::Result<Self, pyo3::PyErr> {}
-
 }
 
-// pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType) -> PyResult<Vec<Vec<f32>>> {
-#[pyfunction]
-pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType) -> PyResult<()> {
+#[pyfunction(signature=(path, n, threshold, sample=SamplingType::Farthest, img_type=ImgType::BlackOnWhite))]
+/// Processes a black and white image into a sample of coordinate pixels
+///
+/// Arguments:
+///     path: path to source image
+///     n: number of pixels
+///     threshold: brightness threshold that gets counted as a 'white' pixel
+///     sample: selecting type of sampling, either 'grid' or 'farthest'
+///     img_type: selecting type of image, either 'black_on_white' or 'white_on_black'. Defaults to
+///     'black_on_white'
+pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType, img_type: ImgType) -> PyResult<()> {
     let source_img = match image::open(path) {
         Ok(img) => img,
         Err(e) => {
@@ -85,11 +89,13 @@ pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType)
         }
     };
 
-    println!("Image loaded successfully with dimensions: {}x{}", source_img.width(), source_img.height());
+    let img = source_img.thumbnail(256, 256);
+
+    println!("Image loaded successfully with dimensions: {}x{}", img.width(), img.height());
 
     // 2. Convert the brightest pixels to coordinates
     // Let's get all pixels with any brightness for this example.
-    let initial_coords = image_to_coordinates(&source_img, threshold);
+    let initial_coords = image_to_coordinates(&img, threshold, img_type);
     println!("Extracted {} initial coordinates.", initial_coords.len());
 
     // 3. Run a sampling algorithm on the coordinates
@@ -106,8 +112,8 @@ pub fn process_image(path: String, n: u32, threshold: f32, sample: SamplingType)
 
     // 4. Turn the sampled coordinates back into an image
     let output_img = coordinates_to_image(
-        source_img.width(),
-        source_img.height(),
+        img.width(),
+        img.height(),
         &sampled_coords,
     );
 
