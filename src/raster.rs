@@ -70,7 +70,7 @@ impl FromPyObject<'_> for SamplingType {
     }
 }
 
-#[pyfunction(signature=(input_path, n, threshold, sample=SamplingType::Farthest, img_type=ImgType::BlackOnWhite, resize=Some((256, 256)), output_path="output/coordinates.png"))]
+#[pyfunction(signature=(input_path, n, sample=SamplingType::Farthest, img_type=ImgType::BlackOnWhite, resize=Some((256, 256)), threshold=0.01, output_path="output/coordinates.png"))]
 /// Processes a black and white image into a sample of coordinate pixels
 ///
 /// Arguments:
@@ -78,24 +78,24 @@ impl FromPyObject<'_> for SamplingType {
 ///         path to source image
 ///     n: u32
 ///         number of pixels to select
-///     threshold: f64 
-///         brightness threshold that gets counted as a 'white' pixel
 ///     sample: str
 ///         selecting type of sampling, either 'grid' or 'farthest'. Defaults to 'farthest'
 ///     img_type: str 
 ///         selecting type of image, either 'black_on_white' or 'white_on_black'. Defaults to 'black_on_white'
 ///     resize: (width: u32, height: u32)
 ///         maximum dimensions by which to resize the image. Will not be resized to exactly those dimensions, but instead to fit within them. Defaults to width = 256, height = 256. Set to None to prevent resizing
+///     threshold: f64 
+///         brightness threshold that gets counted as a 'white' pixel. Defaults to 0.01
 ///     output_path: str
 ///         path where the output coordinates image will be saved. Note that, if the intermediate directories do not exist, they will be created. Defaults to 'output/coordinates.png'
 ///
 pub fn process_image(
     input_path: String, 
     n: u32, 
-    threshold: f32, 
     sample: SamplingType, 
     img_type: ImgType,
     resize: Option<(u32, u32)>,
+    threshold: f32, 
     output_path: &str,
 ) -> PyResult<()> {
     let source_img = match image::open(input_path) {
