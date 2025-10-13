@@ -4,12 +4,25 @@ build-backend = "maturin"
 
 [project]
 name = "raster_drone"
+version = "0.1.0"
+authors = [ {name = "Nicolas Roman Posner", email = "nrposner@uchicago.edu"}, ]
+maintainers = [{ name = "Nicolas Roman Posner", email = "nrposner@uchicago.edu" }]
+description = "Utility to turn images into coordinates for drone shows"
+readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
 ]
-dynamic = ["version"]
+
+license = { file = "LICENSE" }
+
+[project.urls]
+repository = "https://github.com/nrposner/raster_drone"
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
