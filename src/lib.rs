@@ -1,4 +1,7 @@
 mod raster;
+mod transformation;
+mod utils;
+mod sampling;
 
 use pyo3::prelude::*;
 use raster::process_image;
