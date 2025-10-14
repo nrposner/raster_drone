@@ -1,4 +1,4 @@
-use pyo3::IntoPyObject;
+use pyo3::{pyclass, pymethods, IntoPyObject};
 
 #[derive(Debug, Clone, Copy, PartialEq, IntoPyObject)]
 pub struct Coordinate(pub u32, pub u32);
@@ -21,7 +21,8 @@ impl Coordinate {
     }
 }
 
-#[derive(Clone, IntoPyObject)]
+#[derive(Clone)]
+#[pyclass(name="CoordinateOutput", module="raster_drone")]
 pub struct CoordinateOutput {
     coords: Vec<Coordinate>,
     width: u32,
@@ -40,13 +41,20 @@ impl CoordinateOutput {
             height,
         }
     }
-    pub fn coords(self) -> Vec<Coordinate> {
+    pub fn borrow_coords(self) -> Vec<Coordinate> {
         self.coords
     }
+}
+
+#[pymethods]
+impl CoordinateOutput {
     pub fn width(&self) -> u32 {
         self.width
     }
     pub fn height(&self) -> u32 {
         self.height
+    }
+    pub fn coords(&self) -> Vec<Coordinate> {
+        self.coords.clone()
     }
 }

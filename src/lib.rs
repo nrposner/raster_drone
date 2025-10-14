@@ -63,7 +63,7 @@ pub fn process_image(
     let output_img = coordinates_to_image(
         coords_output.width(),
         coords_output.height(),
-        &coords_output.coords(),
+        &coords_output.borrow_coords(),
     );
 
     // creating intermediate directories if necessary
