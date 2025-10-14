@@ -12,7 +12,11 @@ use crate::utils::Coordinate;
 ///
 /// # Returns
 /// A `GrayImage` (grayscale image buffer).
-pub fn coordinates_to_image(width: u32, height: u32, coords: &[Coordinate]) -> GrayImage {
+pub fn coordinates_to_image(
+    width: u32, 
+    height: u32, 
+    coords: &[Coordinate]
+) -> GrayImage {
     // Create a new, all-black grayscale image buffer.
     // `GrayImage` is a type alias for `ImageBuffer<Luma<u8>, Vec<u8>>`.
     let mut img = GrayImage::new(width, height);
@@ -43,7 +47,11 @@ impl FromPyObject<'_> for SamplingType {
             match s.to_lowercase().as_str() {
                 "grid" => Ok(Self::Grid),
                 "farthest" => Ok(Self::Farthest),
-                _ => Err(PyValueError::new_err("The valid values for `sampling` include 'grid' and 'farthest'."))
+                _ => Err(
+                    PyValueError::new_err(
+                        "The valid values for `sampling` include 'grid' and 'farthest'."
+                    )
+                )
             }
         } else {
             Ok(Self::Farthest)

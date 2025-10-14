@@ -13,7 +13,10 @@ use std::cmp::Ordering;
 ///
 /// # Returns
 /// A `Vec<Coordinate>` containing the `n` selected points.
-pub fn farthest_point_sampling(pixels: &[Coordinate], n: u32) -> Vec<Coordinate> {
+pub fn farthest_point_sampling(
+    pixels: &[Coordinate], 
+    n: u32
+) -> Vec<Coordinate> {
     let n = n as usize;
     let m = pixels.len();
 
@@ -80,7 +83,10 @@ pub fn farthest_point_sampling(pixels: &[Coordinate], n: u32) -> Vec<Coordinate>
 ///
 /// # Returns
 /// A `Vec<Coordinate>` containing the sampled points.
-pub fn grid_sampling(pixels: &[Coordinate], cell_size: u32) -> Vec<Coordinate> {
+pub fn grid_sampling(
+    pixels: &[Coordinate], 
+    cell_size: u32
+) -> Vec<Coordinate> {
     // A cell size of 0 would cause a division by zero panic.
     if cell_size == 0 {
         panic!("cell_size cannot be zero.");
