@@ -4,21 +4,16 @@ mod utils;
 mod sampling;
 mod thresholding;
 
-
-// the speed of this application at present means that we may well be able to produce a preview
-// application that would allow the user to dynamically alter things like number of drones, provide
-// their own image, including possibly color images, and we can cache the initial coordinates, and
-// when they change the number of drones, we recalculate the pixel samples on a per-frame basis,
-// very smooth feel, could look great to a committee
-// would want a nicer 'light' display of drone lights with colors
-// maybe against a 'night sky' background instead of a black background??
-// maybe the ability to change colors as well? at that point might be a bit too deep into the UI
-// part of this
-
 use pyo3::{exceptions::PyValueError, prelude::*};
 use image::DynamicImage;
 
-use crate::{raster::{coordinates_to_image, SamplingType}, sampling::{farthest_point_sampling, grid_sampling}, thresholding::bradley_adaptive_threshold, transformation::{image_to_coordinates, ImgType}, utils::Coordinate};
+use crate::{
+    raster::{coordinates_to_image, SamplingType}, 
+    sampling::{farthest_point_sampling, grid_sampling}, 
+    thresholding::bradley_adaptive_threshold, 
+    transformation::{image_to_coordinates, ImgType}, 
+    utils::CoordinateOutput
+};
 
 #[pyfunction(signature=(input_path, n, sample=SamplingType::Farthest, img_type=ImgType::BlackOnWhite, resize=Some((256, 256)), threshold=0.01, bradley=false, bradley_threshold=15, bradley_size=16, output_path="output/coordinates.png"))]
 /// Processes a black and white image into a sample of coordinate pixels
@@ -51,6 +46,72 @@ pub fn process_image(
     bradley_size: u32,
     output_path: &str,
 ) -> PyResult<()> {
+
+    let coords_output = process_image_to_coordinates(
+        input_path, 
+        n, 
+        sample, 
+        img_type, 
+        resize, 
+        threshold, 
+        bradley, 
+        bradley_threshold,
+        bradley_size
+    )?;
+
+    // 4. Turn the sampled coordinates back into an image
+    let output_img = coordinates_to_image(
+        coords_output.width(),
+        coords_output.height(),
+        &coords_output.coords(),
+    );
+
+    // creating intermediate directories if necessary
+    let path = std::path::Path::new(output_path);
+    if let Some(prefix) = path.parent() {
+        std::fs::create_dir_all(prefix).unwrap();
+    }
+
+    match output_img.save(output_path) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(PyValueError::new_err(format!("Unable to create file in path 'output/img.png': {}", e)))
+    }
+}
+
+#[pyfunction(signature=(input_path, n, sample=SamplingType::Farthest, img_type=ImgType::BlackOnWhite, resize=Some((256, 256)), threshold=0.01, bradley=false, bradley_threshold=15, bradley_size=16))]
+/// Processes an input image into a vector of (x, y) coordinates
+///
+/// Arguments:
+///     input_path: str 
+///         path to source image
+///     n: u32
+///         number of pixels to select
+///     sample: str
+///         selecting type of sampling, either 'grid' or 'farthest'. Defaults to 'farthest'
+///     img_type: str 
+///         selecting type of image, either 'black_on_white' or 'white_on_black'. Defaults to 'black_on_white'
+///     resize: (width: u32, height: u32)
+///         maximum dimensions by which to resize the image. Will not be resized to exactly those dimensions, but instead to fit within them. Defaults to width = 256, height = 256. Set to None to prevent resizing
+///     threshold: f64 
+///         brightness threshold that gets counted as a 'white' pixel. Defaults to 0.01
+///
+/// Returns:
+///     coordinates: [(int, int)]
+///         the coordinates of each sampled pixel
+#[allow(clippy::too_many_arguments)]
+pub fn process_image_to_coordinates(
+    input_path: String, 
+    n: u32, 
+    sample: SamplingType, 
+    img_type: ImgType,
+    resize: Option<(u32, u32)>,
+    threshold: f32, 
+    bradley: bool,
+    bradley_threshold: u8,
+    bradley_size: u32,
+
+) -> PyResult<CoordinateOutput> {
+
     let source_img = match image::open(input_path) {
         Ok(img) => img,
         Err(e) => {
@@ -92,83 +153,13 @@ pub fn process_image(
 
     println!("Sampled down to {} coordinates.", sampled_coords.len());
 
-    // 4. Turn the sampled coordinates back into an image
-    let output_img = coordinates_to_image(
-        width,
-        height,
-        &sampled_coords,
-    );
-
-    // creating intermediate directories if necessary
-    let path = std::path::Path::new(output_path);
-    if let Some(prefix) = path.parent() {
-        std::fs::create_dir_all(prefix).unwrap();
-    }
-
-    match output_img.save(output_path) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(PyValueError::new_err(format!("Unable to create file in path 'output/img.png': {}", e)))
-    }
-}
-
-/// Processes an input image into a vector of (x, y) coordinates
-///
-/// Arguments:
-///     input_path: str 
-///         path to source image
-///     n: u32
-///         number of pixels to select
-///     sample: str
-///         selecting type of sampling, either 'grid' or 'farthest'. Defaults to 'farthest'
-///     img_type: str 
-///         selecting type of image, either 'black_on_white' or 'white_on_black'. Defaults to 'black_on_white'
-///     resize: (width: u32, height: u32)
-///         maximum dimensions by which to resize the image. Will not be resized to exactly those dimensions, but instead to fit within them. Defaults to width = 256, height = 256. Set to None to prevent resizing
-///     threshold: f64 
-///         brightness threshold that gets counted as a 'white' pixel. Defaults to 0.01
-///
-/// Returns:
-///     coordinates: [(int, int)]
-///         the coordinates of each sampled pixel
-pub fn process_image_to_coordinates(
-    input_path: String, 
-    n: u32, 
-    sample: SamplingType, 
-    img_type: ImgType,
-    resize: Option<(u32, u32)>,
-    threshold: f32, 
-) -> PyResult<Vec<Coordinate>> {
-    let source_img = match image::open(input_path) {
-        Ok(img) => img,
-        Err(e) => {
-            return Err(PyValueError::new_err(format!("Error loading image: {:?}", e)))
-        }
-    };
-
-    let img = if let Some((width, height)) = resize {
-        source_img.thumbnail(width, height)
-    } else { source_img };
-
-    println!("Image loaded successfully with dimensions: {}x{}", img.width(), img.height());
-
-    // 2. Convert the brightest pixels to coordinates
-    // Let's get all pixels with any brightness for this example.
-    let initial_coords = image_to_coordinates(&img, threshold, img_type);
-    println!("Extracted {} initial coordinates.", initial_coords.len());
-
-    // 3. Run a sampling algorithm on the coordinates
-    let sampled_coords = match sample {
-        SamplingType::Grid => {
-            grid_sampling(&initial_coords, n)
-        },
-        SamplingType::Farthest => {
-            farthest_point_sampling(&initial_coords, n)
-        }
-    };
-
-    println!("Sampled down to {} coordinates.", sampled_coords.len());
-
-    Ok(sampled_coords)
+    Ok(
+        CoordinateOutput::new(
+            sampled_coords,
+            width,
+            height,
+        )
+    )
 }
 
 
@@ -203,6 +194,7 @@ fn test_bradley(
 #[pymodule]
 fn raster_drone(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(process_image, m)?)?;
+    m.add_function(wrap_pyfunction!(process_image_to_coordinates, m)?)?;
     m.add_function(wrap_pyfunction!(test_bradley, m)?)?;
     Ok(())
 }

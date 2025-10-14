@@ -4,7 +4,7 @@
 //
 // so far, only doing global
 
-use image::{DynamicImage, GrayImage, GenericImageView, Rgba, Luma};
+use image::{GrayImage, Luma};
 
 
 /// Applies Bradley's adaptive thresholding algorithm to a grayscale image.

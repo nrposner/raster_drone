@@ -1,4 +1,6 @@
-#[derive(Debug, Clone, Copy, PartialEq)]
+use pyo3::IntoPyObject;
+
+#[derive(Debug, Clone, Copy, PartialEq, IntoPyObject)]
 pub struct Coordinate(pub u32, pub u32);
 
 impl Coordinate {
@@ -16,5 +18,35 @@ impl Coordinate {
     #[allow(dead_code)] // Included for completeness, but we'll use the squared version.
     pub fn distance(&self, rhs: &Self) -> f64 {
         self.distance_squared(rhs).sqrt()
+    }
+}
+
+#[derive(Clone, IntoPyObject)]
+pub struct CoordinateOutput {
+    coords: Vec<Coordinate>,
+    width: u32,
+    height: u32,
+}
+
+impl CoordinateOutput {
+    pub fn new(
+        coords: Vec<Coordinate>,
+        width: u32,
+        height: u32,
+    ) -> Self {
+        Self {
+            coords,
+            width,
+            height,
+        }
+    }
+    pub fn coords(self) -> Vec<Coordinate> {
+        self.coords
+    }
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+    pub fn height(&self) -> u32 {
+        self.height
     }
 }
