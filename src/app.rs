@@ -51,8 +51,8 @@ impl Default for PreprocessingParams {
         Self {
             img_type: ImgType::BlackOnWhite,
             resize: Some((256, 256)),
-            global_threshold: 0.5,
-            use_bradley: true,
+            global_threshold: 0.01,
+            use_bradley: false,
             bradley_size: 50,
             bradley_threshold: 15,
         }
@@ -68,7 +68,7 @@ struct SamplingParams {
 impl Default for SamplingParams {
     fn default() -> Self {
         Self {
-            sample_count: 1000,
+            sample_count: 30,
             sampling_type: SamplingType::Farthest,
         }
     }
@@ -84,8 +84,8 @@ struct VisualParams {
 impl Default for VisualParams {
     fn default() -> Self {
         Self {
-            light_radius: 20.0,
-            light_intensity: 1.5,
+            light_radius: 10.0,
+            light_intensity: 1.0,
             light_color: [1.0, 0.8, 0.5], // A warm white/yellow
         }
     }
@@ -305,7 +305,7 @@ fn run_preprocessing_stage<'a>(
     params: &PreprocessingParams,
     image: &'a Option<image::DynamicImage>,
 ) -> Option<CoordinateOutput> {
-    println!("Rerunning EXPENSIVE pre-processing stage...");
+    // println!("Rerunning EXPENSIVE pre-processing stage...");
     
     // If no image is loaded, there are no coordinates to return.
     let Some(source_img) = image else {
@@ -347,7 +347,7 @@ fn run_sampling_stage(
     params: &SamplingParams,
     intermediate_coords: Option<CoordinateOutput>,
 ) -> Vec<Coordinate> {
-    println!("Rerunning CHEAP sampling stage...");
+    // println!("Rerunning CHEAP sampling stage...");
     // This is where you would apply your grid, farthest-point, etc., sampling
     // algorithm to the `intermediate_coords`.
 
@@ -462,7 +462,7 @@ pub async fn run_app() {
                                 ui.heading("Sampling");
                                 ui.add(egui::Slider::new(
                                     &mut app_state.sampling_params.sample_count,
-                                    0..=5000
+                                    1..=500
                                 ).text("Sample Count"));
                                 
                                 ui.separator();
@@ -470,7 +470,7 @@ pub async fn run_app() {
                                 ui.heading("Visuals");
                                 ui.add(egui::Slider::new(
                                     &mut app_state.visual_params.light_radius, 
-                                    1.0..=100.0
+                                    1.0..=20.0
                                 ).text("Light Radius"));
                                 ui.add(egui::Slider::new(
                                     &mut app_state.visual_params.light_intensity, 
