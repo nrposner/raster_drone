@@ -1,4 +1,5 @@
 use std::time::Instant;
+use std::borrow::Cow;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{EventLoop},
@@ -279,8 +280,8 @@ struct AppState {
     // --- Data ---
     // The raw image data is now stored in memory after being loaded.
     image: Option<image::DynamicImage>,
-    intermediate_coords: Vec<[f32; 2]>,
-    final_light_coords: Vec<[f32; 2]>,
+    intermediate_coords: Option<CoordinateOutput>,
+    final_light_coords: Vec<Coordinate>,
 }
 
 impl AppState {
@@ -292,21 +293,17 @@ impl AppState {
             cached_sampling_params: SamplingParams::default(),
             visual_params: VisualParams::default(),
             image: None,
-            intermediate_coords: Vec::new(),
+            intermediate_coords: None,
             final_light_coords: Vec::new(),
         }
     }
 }
 
 
-
-//==================================================================================
-//  PLACEHOLDER STAGE 1: Expensive image processing.
-//==================================================================================
 /// Takes pre-processing params, loads/processes an image, returns all valid coordinates.
-fn run_preprocessing_stage(
+fn run_preprocessing_stage<'a>(
     params: &PreprocessingParams,
-    image: &Option<image::DynamicImage>,
+    image: &'a Option<image::DynamicImage>,
 ) -> Option<CoordinateOutput> {
     println!("Rerunning EXPENSIVE pre-processing stage...");
     
@@ -315,23 +312,25 @@ fn run_preprocessing_stage(
         return None
     };
 
-    let img = if params.use_bradley {
-        &DynamicImage::ImageLuma8(
-            bradley_adaptive_threshold(
-                &source_img.to_luma8(), 
-                params.bradley_size, 
-                params.bradley_threshold
-            )
-        )
-    } else { source_img };
+    // using a CoW pointer to avoid cloning unless necessary down the line
+    let mut img_cow: Cow<'a, DynamicImage> = Cow::Borrowed(source_img);
 
-    let img = if let Some((width, height)) = params.resize {
-        &img.thumbnail(width, height)
-    } else { img };
+    if params.use_bradley {
+        img_cow = Cow::Owned(DynamicImage::ImageLuma8(bradley_adaptive_threshold(
+            &img_cow.to_luma8(),
+            params.bradley_size,
+            params.bradley_threshold,
+        )));
+    }
+    
+    if let Some((width, height)) = params.resize {
+        // .thumbnail() takes a reference, so we pass our Cow's content.
+        img_cow = Cow::Owned(img_cow.thumbnail(width, height));
+    }
 
-    let (image_width, image_height) = img.dimensions();
+    let (image_width, image_height) = img_cow.dimensions();
 
-    let initial_coords = image_to_coordinates(img, params.global_threshold, params.img_type);
+    let initial_coords = image_to_coordinates(&img_cow, params.global_threshold, params.img_type);
 
     Some(
         CoordinateOutput::new(
@@ -343,10 +342,6 @@ fn run_preprocessing_stage(
 }
 
 
-
-//==================================================================================
-//  PLACEHOLDER STAGE 2: Cheap coordinate sampling.
-//==================================================================================
 /// Takes sampling params and the full coordinate set, returns the final sample.
 fn run_sampling_stage(
     params: &SamplingParams,

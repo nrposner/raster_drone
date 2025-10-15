@@ -14,9 +14,9 @@ impl Coordinate {
     pub fn y(&self) -> u32 {
         self.0[1]
     }
-    /// since we only use it for comparison, it's more performant to use
-    /// the square of euclidean distances, so that we avoid
-    /// an expensive square root operation
+    // since we only use it for comparison, it's more performant to use
+    // the square of euclidean distances, so that we avoid
+    // an expensive square root operation
     pub fn distance_squared(&self, rhs: &Self) -> f64 {
         let dx = self.x().abs_diff(rhs.x()) as f64;
         let dy = self.y().abs_diff(rhs.y()) as f64;
