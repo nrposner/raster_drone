@@ -354,7 +354,6 @@ fn run_sampling_stage(
     println!("Rerunning CHEAP sampling stage...");
     // This is where you would apply your grid, farthest-point, etc., sampling
     // algorithm to the `intermediate_coords`.
-    // For this example, we'll just take the first N points.
 
     let initial_coords = if let Some(coords) = intermediate_coords {
         coords.coords()
@@ -427,11 +426,6 @@ pub async fn run_app() {
         1,    // msaa_samples
     );
 
-    // Initial run of the pipelines - will produce empty results since no image is loaded.
-    app_state.intermediate_coords = run_preprocessing_stage(&app_state.preprocessing_params, &app_state.image);
-    app_state.final_light_coords = run_sampling_stage(&app_state.sampling_params, app_state.intermediate_coords.clone());
-
-
     // --- Event Loop ---
     event_loop.run(move |event, elwt| {
         match event {
@@ -486,7 +480,19 @@ pub async fn run_app() {
                         }
                         
                         let egui_output = egui_ctx.end_frame();
+                        egui_state.handle_platform_output(&window, egui_output.platform_output);
+                        
+                        // This is the crucial step: handle texture updates *before* tessellating.
+                        for (id, image_delta) in &egui_output.textures_delta.set {
+                            egui_renderer.update_texture(&render_state.device, &render_state.queue, *id, image_delta);
+                        }
+                        
                         let paint_jobs = egui_ctx.tessellate(egui_output.shapes, window.scale_factor() as f32);
+                        
+                        // Free any textures that egui no longer needs.
+                        for id in &egui_output.textures_delta.free {
+                            egui_renderer.free_texture(id);
+                        }
                         
                         // --- Get Surface Texture for Drawing ---
                         let output_frame = match render_state.surface.get_current_texture() {
@@ -573,7 +579,6 @@ pub async fn run_app() {
                         // --- Submit and Present ---
                         render_state.queue.submit(std::iter::once(encoder.finish()));
                         output_frame.present();
-                        egui_state.handle_platform_output(&window, egui_output.platform_output);
                     }
                     _ => {}
                 }
@@ -586,4 +591,5 @@ pub async fn run_app() {
     })
     .unwrap();
 }
+
 
