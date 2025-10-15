@@ -1,10 +1,14 @@
-use std::time::Instant;
 use std::borrow::Cow;
-use winit::{
-    event::{Event, WindowEvent},
-    event_loop::{EventLoop},
-    window::Window,
-};
+use egui_wgpu::wgpu;
+use egui_winit::winit::{self, event::{Event, WindowEvent}, event_loop::EventLoop, window::Window};
+use std::sync::Arc;
+// use winit::{
+//     event::{Event, WindowEvent},
+//     event_loop::{EventLoop},
+//     window::Window,
+// };
+use egui_wgpu::Renderer as EguiRenderer;
+use egui_winit::State as EguiState;
 
 use image::{DynamicImage, GenericImageView};
 
@@ -89,9 +93,9 @@ impl Default for VisualParams {
     }
 }
 
-
 // This struct manages all the wgpu-related state.
 struct RenderState<'a> {
+    window: Arc<Window>, // Store the Arc to keep the window alive
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -104,11 +108,11 @@ struct RenderState<'a> {
 }
 
 impl<'a> RenderState<'a> {
-    async fn new(window: &'a Window) -> Self {
+    async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
-        let surface = instance.create_surface(window).unwrap();
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+        let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -125,7 +129,8 @@ impl<'a> RenderState<'a> {
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::default(),
                     ..Default::default()
-                }
+                },
+                None,
             )
             .await
             .unwrap();
@@ -221,19 +226,17 @@ impl<'a> RenderState<'a> {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: Some("vs_main"), // Simple pass-through vertex shader
+                entry_point: "vs_main", // Simple pass-through vertex shader
                 buffers: &[],
-                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_main"), // Our main shader logic
+                entry_point: "fs_main", // Our main shader logic
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
-                compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -242,10 +245,10 @@ impl<'a> RenderState<'a> {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-            cache: None,
         });
 
         Self {
+            window,
             surface,
             device,
             queue,
@@ -375,5 +378,199 @@ fn run_sampling_stage(
 }
 
 
+pub async fn run_app() {
+    // --- Basic Setup ---
+    let event_loop = EventLoop::new().unwrap();
+    let window = Arc::new(winit::window::WindowBuilder::new()
+        .with_title("Image Light Sampler")
+        .with_inner_size(winit::dpi::LogicalSize::new(1280, 720))
+        .build(&event_loop)
+        .unwrap());
+
+    // --- State Initialization ---
+    // The RenderState is created with a lifetime tied to the `window`.
+    // By creating them here and `move`ing them into the event loop,
+    // we ensure they both live for the entire duration of the application.
+    // This is the key to avoiding the lifetime issues you've encountered.
+    let mut render_state = RenderState::new(Arc::clone(&window)).await;
+    let mut app_state = AppState::new();
+
+    // --- Egui Setup ---
+    let egui_ctx = egui::Context::default();
+    let mut egui_state = EguiState::new(
+        egui_ctx.clone(),
+        egui::ViewportId::ROOT,
+        &window,
+        None,
+        None,
+    );
+    let mut egui_renderer = EguiRenderer::new(
+        &render_state.device,
+        render_state.config.format,
+        None, // No depth buffer
+        1,    // msaa_samples
+    );
+
+    // Initial run of the pipelines
+    app_state.intermediate_coords = run_preprocessing_stage(&app_state.preprocessing_params, &app_state.image);
+    app_state.final_light_coords = run_sampling_stage(&app_state.sampling_params, app_state.intermediate_coords.clone());
 
 
+    // --- Event Loop ---
+    event_loop.run(move |event, elwt| {
+        match event {
+            Event::WindowEvent { window_id, event } if window_id == window.id() => {
+                // Let egui handle the event first. If it consumes the event,
+                // we don't process it further.
+                let response = egui_state.on_window_event(&window, &event);
+                if response.consumed {
+                    return;
+                }
+
+                match event {
+                    WindowEvent::CloseRequested => elwt.exit(),
+                    WindowEvent::Resized(physical_size) => {
+                        render_state.resize(physical_size);
+                    }
+                    WindowEvent::ScaleFactorChanged { .. } => {
+                        // Winit automatically handles DPI changes for Resized,
+                        // so we just need to let egui know.
+                        // egui_state.set_scale_factor(new_inner_size.width as f32, new_inner_size.height as f32);
+                    }
+                    WindowEvent::RedrawRequested => {
+                        // --- 1. Update Pipelines if Params Changed ---
+                        let mut force_resample = false;
+                        if app_state.preprocessing_params != app_state.cached_preprocessing_params {
+                            app_state.intermediate_coords = run_preprocessing_stage(
+                                &app_state.preprocessing_params,
+                                &app_state.image
+                            );
+                            app_state.cached_preprocessing_params = app_state.preprocessing_params;
+                            force_resample = true; // Pre-processing changed, so sampling must re-run
+                        }
+
+                        if force_resample || app_state.sampling_params != app_state.cached_sampling_params {
+                            app_state.final_light_coords = run_sampling_stage(
+                                &app_state.sampling_params,
+                                app_state.intermediate_coords.clone() // Cloning is cheap here
+                            );
+                            app_state.cached_sampling_params = app_state.sampling_params;
+                        }
+
+                        // --- 2. Update GPU Buffers ---
+                        let uniforms = ShaderUniforms {
+                            resolution: [render_state.size.width as f32, render_state.size.height as f32],
+                            light_color: app_state.visual_params.light_color,
+                            _padding1: 0,
+                            light_radius: app_state.visual_params.light_radius,
+                            light_intensity: app_state.visual_params.light_intensity,
+                            light_count: app_state.final_light_coords.len() as u32,
+                            _padding2: 0,
+                        };
+                        render_state.queue.write_buffer(&render_state.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+
+                        // Convert coordinates to flat f32 array for the shader
+                        let light_data: Vec<[f32; 2]> = app_state.final_light_coords.iter()
+                            .map(|coord| [coord.x() as f32, coord.y() as f32])
+                            .collect();
+                        render_state.queue.write_buffer(&render_state.lights_storage_buffer, 0, bytemuck::cast_slice(&light_data));
+
+
+                        // --- 3. Egui Frame ---
+                        let raw_input = egui_state.take_egui_input(&window);
+                        egui_ctx.begin_frame(raw_input);
+
+                        // Define your UI here
+                        egui::Window::new("Controls").show(&egui_ctx, |ui| {
+                            ui.heading("Preprocessing");
+                            ui.add(egui::Slider::new(&mut app_state.preprocessing_params.global_threshold, 0.0..=1.0).text("Global Threshold"));
+                            ui.checkbox(&mut app_state.preprocessing_params.use_bradley, "Use Bradley Thresholding");
+                            
+                            ui.separator();
+
+                            ui.heading("Sampling");
+                            ui.add(egui::Slider::new(&mut app_state.sampling_params.sample_count, 0..=5000).text("Sample Count"));
+                            
+                            ui.separator();
+
+                            ui.heading("Visuals");
+                            ui.add(egui::Slider::new(&mut app_state.visual_params.light_radius, 1.0..=100.0).text("Light Radius"));
+                            ui.add(egui::Slider::new(&mut app_state.visual_params.light_intensity, 0.1..=5.0).text("Light Intensity"));
+                            ui.color_edit_button_rgb(&mut app_state.visual_params.light_color);
+                        });
+                        
+                        let egui_output = egui_ctx.end_frame();
+
+                        // --- 4. Get Surface Texture for Drawing ---
+                        let output_frame = match render_state.surface.get_current_texture() {
+                            Ok(frame) => frame,
+                            Err(e) => {
+                                eprintln!("Dropped frame: {:?}", e);
+                                return;
+                            }
+                        };
+                        let output_view = output_frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+                        // --- 5. Record Rendering Commands ---
+                        let mut encoder = render_state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Render Encoder"),
+                        });
+
+                        // Upload Egui draw data to the GPU
+                        let screen_descriptor = egui_wgpu::ScreenDescriptor {
+                            size_in_pixels: [render_state.config.width, render_state.config.height],
+                            pixels_per_point: window.scale_factor() as f32,
+                        };
+                        let paint_jobs = egui_ctx.tessellate(egui_output.shapes, screen_descriptor.pixels_per_point);
+
+                        egui_renderer.update_buffers(&render_state.device, &render_state.queue, &mut encoder, &paint_jobs, &screen_descriptor);
+                        
+                        { // Scoped to drop render_pass
+                            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("Main Render Pass"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &output_view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                })],
+                                depth_stencil_attachment: None,
+                                timestamp_writes: None,
+                                occlusion_query_set: None,
+                            });
+                            
+                            // Render your custom background shader FIRST
+                            render_pass.set_pipeline(&render_state.render_pipeline);
+                            render_pass.set_bind_group(0, &render_state.bind_group, &[]);
+                            render_pass.draw(0..3, 0..1); // Draw a single triangle that covers the screen
+
+                            // Render the Egui UI on TOP
+                            egui_renderer.render(&mut render_pass, &paint_jobs, &screen_descriptor);
+                        }
+
+
+                        // --- 6. Submit and Present ---
+                        render_state.queue.submit(std::iter::once(encoder.finish()));
+                        output_frame.present();
+                        
+                        egui_state.handle_platform_output(&window, egui_output.platform_output);
+                    }
+                    _ => {}
+                }
+            }
+            Event::AboutToWait => {
+                // Request a redraw continuously for animations or real-time updates.
+                window.request_redraw();
+            }
+            _ => (),
+        }
+    })
+    .unwrap();
+}
+
+fn main() {
+    // You might want to add logging initialization here, e.g., `env_logger::init();`
+    pollster::block_on(run_app());
+}
