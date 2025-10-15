@@ -23,18 +23,15 @@ const MAX_LIGHTS: u64 = 65535;
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct ShaderUniforms {
     resolution: [f32; 2],
-    // 8 bytes of padding is needed here to align `light_color` to a 16-byte boundary.
-    // `resolution` is 8 bytes, so we add 8 more to reach 16.
+    // Pad from offset 8 to 16 for vec3<f32> alignment in WGSL.
     _padding0: [u32; 2],
     light_color: [f32; 3],
-    // `_padding1` correctly aligns the next member to a 4-byte boundary.
-    _padding1: u32,
+    // The following fields are all 4-byte aligned and can follow each other.
     light_radius: f32,
     light_intensity: f32,
     light_count: u32,
-    // The total size of the struct must be a multiple of 16.
-    // We are at 44 bytes, so this final padding takes us to 48.
-    _padding2: u32,
+    // Pad struct to be a multiple of 16 bytes for uniform buffer binding.
+    _padding1: [u32; 2],
 }
 
 // --- Tiered Pipeline Parameters ---
@@ -129,7 +126,6 @@ impl<'a> RenderState<'a> {
                     label: Some("Device"),
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::default(),
-                    ..Default::default()
                 },
                 None,
             )
@@ -452,19 +448,34 @@ pub async fn run_app() {
                                 ui_load_image_button(ui, &mut app_state);
                                 ui.separator();
                                 ui.heading("Preprocessing");
-                                ui.add(egui::Slider::new(&mut app_state.preprocessing_params.global_threshold, 0.0..=1.0).text("Global Threshold"));
-                                ui.checkbox(&mut app_state.preprocessing_params.use_bradley, "Use Bradley Thresholding");
+                                ui.add(egui::Slider::new(
+                                    &mut app_state.preprocessing_params.global_threshold, 
+                                    0.0..=1.0
+                                ).text("Global Threshold"));
+                                ui.checkbox(
+                                    &mut app_state.preprocessing_params.use_bradley,
+                                    "Use Bradley Thresholding"
+                                );
                                 
                                 ui.separator();
 
                                 ui.heading("Sampling");
-                                ui.add(egui::Slider::new(&mut app_state.sampling_params.sample_count, 0..=5000).text("Sample Count"));
+                                ui.add(egui::Slider::new(
+                                    &mut app_state.sampling_params.sample_count,
+                                    0..=5000
+                                ).text("Sample Count"));
                                 
                                 ui.separator();
 
                                 ui.heading("Visuals");
-                                ui.add(egui::Slider::new(&mut app_state.visual_params.light_radius, 1.0..=100.0).text("Light Radius"));
-                                ui.add(egui::Slider::new(&mut app_state.visual_params.light_intensity, 0.1..=5.0).text("Light Intensity"));
+                                ui.add(egui::Slider::new(
+                                    &mut app_state.visual_params.light_radius, 
+                                    1.0..=100.0
+                                ).text("Light Radius"));
+                                ui.add(egui::Slider::new(
+                                    &mut app_state.visual_params.light_intensity, 
+                                    0.1..=5.0
+                                ).text("Light Intensity"));
                                 ui.color_edit_button_rgb(&mut app_state.visual_params.light_color);
                             });
                         } else {
@@ -480,14 +491,25 @@ pub async fn run_app() {
                         }
                         
                         let egui_output = egui_ctx.end_frame();
-                        egui_state.handle_platform_output(&window, egui_output.platform_output);
+                        egui_state.handle_platform_output(
+                            &window, 
+                            egui_output.platform_output
+                        );
                         
                         // This is the crucial step: handle texture updates *before* tessellating.
                         for (id, image_delta) in &egui_output.textures_delta.set {
-                            egui_renderer.update_texture(&render_state.device, &render_state.queue, *id, image_delta);
+                            egui_renderer.update_texture(
+                                &render_state.device, 
+                                &render_state.queue, 
+                                *id, 
+                                image_delta
+                            );
                         }
                         
-                        let paint_jobs = egui_ctx.tessellate(egui_output.shapes, window.scale_factor() as f32);
+                        let paint_jobs = egui_ctx.tessellate(
+                            egui_output.shapes, 
+                            window.scale_factor() as f32
+                        );
                         
                         // Free any textures that egui no longer needs.
                         for id in &egui_output.textures_delta.free {
@@ -499,10 +521,14 @@ pub async fn run_app() {
                             Ok(frame) => frame,
                             Err(e) => { eprintln!("Dropped frame: {:?}", e); return; }
                         };
-                        let output_view = output_frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                        let output_view = output_frame.texture.create_view(
+                            &wgpu::TextureViewDescriptor::default()
+                        );
 
                         // --- Record Rendering Commands ---
-                        let mut encoder = render_state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+                        let mut encoder = render_state.device.create_command_encoder(
+                            &wgpu::CommandEncoderDescriptor::default()
+                        );
                         let screen_descriptor = egui_wgpu::ScreenDescriptor {
                             size_in_pixels: [render_state.config.width, render_state.config.height],
                             pixels_per_point: window.scale_factor() as f32,
@@ -513,13 +539,19 @@ pub async fn run_app() {
                             // --- Update Pipelines if Params Changed ---
                             let mut force_resample = false;
                             if app_state.preprocessing_params != app_state.cached_preprocessing_params {
-                                app_state.intermediate_coords = run_preprocessing_stage(&app_state.preprocessing_params, &app_state.image);
+                                app_state.intermediate_coords = run_preprocessing_stage(
+                                    &app_state.preprocessing_params, 
+                                    &app_state.image
+                                );
                                 app_state.cached_preprocessing_params = app_state.preprocessing_params;
                                 force_resample = true;
                             }
 
                             if force_resample || app_state.sampling_params != app_state.cached_sampling_params {
-                                app_state.final_light_coords = run_sampling_stage(&app_state.sampling_params, app_state.intermediate_coords.clone());
+                                app_state.final_light_coords = run_sampling_stage(
+                                    &app_state.sampling_params, 
+                                    app_state.intermediate_coords.clone()
+                                );
                                 app_state.cached_sampling_params = app_state.sampling_params;
                             }
 
@@ -528,30 +560,61 @@ pub async fn run_app() {
                                 resolution: [render_state.size.width as f32, render_state.size.height as f32],
                                 _padding0: [0, 0],
                                 light_color: app_state.visual_params.light_color,
-                                _padding1: 0,
                                 light_radius: app_state.visual_params.light_radius,
                                 light_intensity: app_state.visual_params.light_intensity,
                                 light_count: app_state.final_light_coords.len() as u32,
-                                _padding2: 0,
+                                _padding1: [0, 0],
                             };
-                            render_state.queue.write_buffer(&render_state.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+                            render_state.queue.write_buffer(
+                                &render_state.uniform_buffer, 
+                                0, 
+                                bytemuck::cast_slice(&[uniforms])
+                            );
 
-                            let light_data: Vec<[f32; 2]> = app_state.final_light_coords.iter()
-                                .map(|coord| [coord.x() as f32, coord.y() as f32])
-                                .collect();
-                            render_state.queue.write_buffer(&render_state.lights_storage_buffer, 0, bytemuck::cast_slice(&light_data));
+                            let light_data: Vec<[f32; 2]> = if let Some(coords) = &app_state.intermediate_coords {
+                                let (img_w, img_h) = (coords.width() as f32, coords.height() as f32);
+                                let (screen_w, screen_h) = (render_state.size.width as f32, render_state.size.height as f32);
+
+                                app_state.final_light_coords.iter()
+                                    .map(|coord| {
+                                        // Scale coordinates from image space to screen space
+                                        let x = (coord.x() as f32 / img_w) * screen_w;
+                                        let y = (coord.y() as f32 / img_h) * screen_h;
+                                        [x, y]
+                                    })
+                                    .collect()
+                            } else {
+                                vec![]
+                            };
+
+                            render_state.queue.write_buffer(
+                                &render_state.lights_storage_buffer, 
+                                0,
+                                bytemuck::cast_slice(&light_data)
+                            );
                             
                             // --- Render Lights + UI ---
-                            egui_renderer.update_buffers(&render_state.device, &render_state.queue, &mut encoder, &paint_jobs, &screen_descriptor);
+                            egui_renderer.update_buffers(
+                                &render_state.device, 
+                                &render_state.queue, 
+                                &mut encoder, 
+                                &paint_jobs, 
+                                &screen_descriptor
+                            );
                             {
                                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                                     label: Some("Main Render Pass"),
                                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                         view: &output_view,
                                         resolve_target: None,
-                                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                                        ops: wgpu::Operations { 
+                                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), 
+                                            store: wgpu::StoreOp::Store 
+                                        },
                                     })],
-                                    depth_stencil_attachment: None, timestamp_writes: None, occlusion_query_set: None,
+                                    depth_stencil_attachment: None, 
+                                    timestamp_writes: None, 
+                                    occlusion_query_set: None,
                                 });
                                 render_pass.set_pipeline(&render_state.render_pipeline);
                                 render_pass.set_bind_group(0, &render_state.bind_group, &[]);
@@ -560,7 +623,13 @@ pub async fn run_app() {
                             }
                         } else {
                             // --- Render Egui Waiting Screen ONLY ---
-                            egui_renderer.update_buffers(&render_state.device, &render_state.queue, &mut encoder, &paint_jobs, &screen_descriptor);
+                            egui_renderer.update_buffers(
+                                &render_state.device, 
+                                &render_state.queue, 
+                                &mut encoder, 
+                                &paint_jobs, 
+                                &screen_descriptor
+                            );
                             {
                                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                                     label: Some("Waiting Screen Pass"),
@@ -568,11 +637,21 @@ pub async fn run_app() {
                                         view: &output_view,
                                         resolve_target: None,
                                         // Clear with a dark gray instead of black
-                                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.1, b: 0.12, a: 1.0 }), store: wgpu::StoreOp::Store },
+                                        ops: wgpu::Operations { 
+                                            load: wgpu::LoadOp::Clear(
+                                                wgpu::Color { r: 0.1, g: 0.1, b: 0.12, a: 1.0 }
+                                            ), 
+                                            store: wgpu::StoreOp::Store },
                                     })],
-                                    depth_stencil_attachment: None, timestamp_writes: None, occlusion_query_set: None,
+                                    depth_stencil_attachment: None, 
+                                    timestamp_writes: None, 
+                                    occlusion_query_set: None,
                                 });
-                                egui_renderer.render(&mut render_pass, &paint_jobs, &screen_descriptor);
+                                egui_renderer.render(
+                                    &mut render_pass, 
+                                    &paint_jobs, 
+                                    &screen_descriptor
+                                );
                             }
                         }
                         
@@ -591,5 +670,4 @@ pub async fn run_app() {
     })
     .unwrap();
 }
-
 
