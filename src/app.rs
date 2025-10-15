@@ -12,7 +12,7 @@ use egui_winit::State as EguiState;
 
 use image::{DynamicImage, GenericImageView};
 
-use crate::{sampling::{farthest_point_sampling, grid_sampling}, thresholding::bradley_adaptive_threshold, transformation::image_to_coordinates, ImgType};
+use crate::{sampling::{farthest_point_sampling, grid_sampling}, thresholding::bradley_adaptive_threshold, transformation::{image_to_coordinates, ImgType}};
 use crate::raster::SamplingType;
 use crate::utils::{Coordinate, CoordinateOutput};
 
@@ -570,7 +570,3 @@ pub async fn run_app() {
     .unwrap();
 }
 
-fn main() {
-    // You might want to add logging initialization here, e.g., `env_logger::init();`
-    pollster::block_on(run_app());
-}
