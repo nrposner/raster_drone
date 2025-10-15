@@ -17,5 +17,6 @@ clap = "4.5.48"
 egui = "0.33.0"
 image = { version = "0.25.8", features = ["png"] }
 pyo3 = "0.23.3"
+rfd = "0.15.4"
 wgpu = "27.0.1"
 winit = "0.30.12"

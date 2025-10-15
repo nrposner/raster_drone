@@ -35,7 +35,7 @@ pub fn coordinates_to_image(
     img
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum SamplingType {
     Grid,
     Farthest,

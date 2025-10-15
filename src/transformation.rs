@@ -2,6 +2,7 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 use crate::utils::Coordinate;
 use image::{DynamicImage, GenericImageView};
 
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ImgType {
     BlackOnWhite,
     WhiteOnBlack,

@@ -5,6 +5,12 @@ use winit::{
     window::Window,
 };
 
+use image::{DynamicImage, GenericImageView};
+
+use crate::{sampling::{farthest_point_sampling, grid_sampling}, thresholding::bradley_adaptive_threshold, transformation::image_to_coordinates, ImgType};
+use crate::raster::SamplingType;
+use crate::utils::{Coordinate, CoordinateOutput};
+
 // Shader code is embedded directly into the binary for simplicity.
 const SHADER_CODE: &str = include_str!("lights.wgsl");
 // The maximum number of lights we can send to the GPU.
@@ -25,41 +31,27 @@ struct ShaderUniforms {
     _padding2: u32,
 }
 
-// Enums for our UI controls.
-#[derive(Debug, PartialEq, Clone, Copy)]
-enum SamplingType {
-    Grid,
-    FarthestPoint,
-}
-#[derive(Debug, PartialEq, Clone, Copy)]
-enum ImageType {
-    BlackOnWhite,
-    WhiteOnBlack,
-}
-
 // --- Tiered Pipeline Parameters ---
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 struct PreprocessingParams {
-    image_type: ImageType,
-    resize_w: u32,
-    resize_h: u32,
+    img_type: ImgType,
+    resize: Option<(u32, u32)>,
     global_threshold: f32,
     use_bradley: bool,
     bradley_size: u32,
-    bradley_threshold: f32,
+    bradley_threshold: u8,
 }
 
 impl Default for PreprocessingParams {
     fn default() -> Self {
         Self {
-            image_type: ImageType::BlackOnWhite,
-            resize_w: 512,
-            resize_h: 512,
+            img_type: ImgType::BlackOnWhite,
+            resize: Some((256, 256)),
             global_threshold: 0.5,
             use_bradley: true,
             bradley_size: 50,
-            bradley_threshold: 0.15,
+            bradley_threshold: 15,
         }
     }
 }
@@ -74,7 +66,7 @@ impl Default for SamplingParams {
     fn default() -> Self {
         Self {
             sample_count: 1000,
-            sampling_type: SamplingType::Grid,
+            sampling_type: SamplingType::Farthest,
         }
     }
 }
@@ -285,8 +277,8 @@ struct AppState {
     visual_params: VisualParams,
 
     // --- Data ---
-    // The raw image data would be stored here, e.g.,
-    // image: Option<image::DynamicImage>,
+    // The raw image data is now stored in memory after being loaded.
+    image: Option<image::DynamicImage>,
     intermediate_coords: Vec<[f32; 2]>,
     final_light_coords: Vec<[f32; 2]>,
 }
@@ -299,8 +291,94 @@ impl AppState {
             sampling_params: SamplingParams::default(),
             cached_sampling_params: SamplingParams::default(),
             visual_params: VisualParams::default(),
+            image: None,
             intermediate_coords: Vec::new(),
             final_light_coords: Vec::new(),
         }
     }
 }
+
+
+
+//==================================================================================
+//  PLACEHOLDER STAGE 1: Expensive image processing.
+//==================================================================================
+/// Takes pre-processing params, loads/processes an image, returns all valid coordinates.
+fn run_preprocessing_stage(
+    params: &PreprocessingParams,
+    image: &Option<image::DynamicImage>,
+) -> Option<CoordinateOutput> {
+    println!("Rerunning EXPENSIVE pre-processing stage...");
+    
+    // If no image is loaded, there are no coordinates to return.
+    let Some(source_img) = image else {
+        return None
+    };
+
+    let img = if params.use_bradley {
+        &DynamicImage::ImageLuma8(
+            bradley_adaptive_threshold(
+                &source_img.to_luma8(), 
+                params.bradley_size, 
+                params.bradley_threshold
+            )
+        )
+    } else { source_img };
+
+    let img = if let Some((width, height)) = params.resize {
+        &img.thumbnail(width, height)
+    } else { img };
+
+    let (image_width, image_height) = img.dimensions();
+
+    let initial_coords = image_to_coordinates(img, params.global_threshold, params.img_type);
+
+    Some(
+        CoordinateOutput::new(
+            initial_coords,
+            image_width,
+            image_height,
+        )
+    )
+}
+
+
+
+//==================================================================================
+//  PLACEHOLDER STAGE 2: Cheap coordinate sampling.
+//==================================================================================
+/// Takes sampling params and the full coordinate set, returns the final sample.
+fn run_sampling_stage(
+    params: &SamplingParams,
+    intermediate_coords: Option<CoordinateOutput>,
+) -> Vec<Coordinate> {
+    println!("Rerunning CHEAP sampling stage...");
+    // This is where you would apply your grid, farthest-point, etc., sampling
+    // algorithm to the `intermediate_coords`.
+    // For this example, we'll just take the first N points.
+
+    let initial_coords = if let Some(coords) = intermediate_coords {
+        coords.coords()
+    } else {
+        vec![]
+    };
+
+    // if the initial coordinates set is less than the supplied number of points,
+    // don't sample and just return the whole thing
+    if initial_coords.len() <= params.sample_count.try_into().unwrap() {
+        initial_coords
+    } else {
+        match params.sampling_type {
+            SamplingType::Farthest => {
+                farthest_point_sampling(&initial_coords, params.sample_count)
+            },
+            SamplingType::Grid => {
+                grid_sampling(&initial_coords, params.sample_count)
+            }
+        }
+    }
+}
+
+
+
+
