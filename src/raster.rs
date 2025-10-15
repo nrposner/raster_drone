@@ -27,8 +27,8 @@ pub fn coordinates_to_image(
     // Iterate through the coordinates and "paint" a white pixel at each location.
     for coord in coords {
         // A bounds check is good practice to prevent panics.
-        if coord.0 < width && coord.1 < height {
-            img.put_pixel(coord.0, coord.1, white_pixel);
+        if coord.x() < width && coord.y() < height {
+            img.put_pixel(coord.x(), coord.y(), white_pixel);
         }
     }
 

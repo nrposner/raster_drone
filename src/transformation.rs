@@ -49,7 +49,7 @@ pub fn image_to_coordinates(img: &DynamicImage, percentile: f32, img_type: ImgTy
 
         // We only care about pixels that have some brightness.
         if brightness > 0.0 {
-            pixel_brightness_data.push((brightness, Coordinate(x, y)));
+            pixel_brightness_data.push((brightness, Coordinate::new(x, y)));
         }
     }
 

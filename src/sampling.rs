@@ -100,8 +100,8 @@ pub fn grid_sampling(
     let mut grid: HashMap<(u32, u32), Coordinate> = HashMap::new();
 
     for &pixel in pixels {
-        let cell_x = pixel.0 / cell_size;
-        let cell_y = pixel.1 / cell_size;
+        let cell_x = pixel.x() / cell_size;
+        let cell_y = pixel.y() / cell_size;
         let cell_key = (cell_x, cell_y);
 
         // The `entry` API is perfect for this. `or_insert` will only
