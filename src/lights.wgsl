@@ -41,7 +41,14 @@ fn fs_main(@builtin(position) pixel_coord: vec4<f32>) -> @location(0) vec4<f32> 
     // A falloff constant derived from the radius.
     // The 4.6 constant is chosen because exp(-4.6) is ~0.01,
     // meaning the glow effectively ends at the radius.
-    let falloff_k = 4.6 / (uniforms.light_radius * uniforms.light_radius);
+    let radius_sq = uniforms.light_radius * uniforms.light_radius;
+
+    // By clamping `radius_sq` to a small minimum value, we prevent division by zero
+    // and the resulting NaN when the radius is 0.
+    let falloff_k = 4.6 / max(radius_sq, 0.0001);
+
+
+    //let falloff_k = 4.6 / (uniforms.light_radius * uniforms.light_radius);
 
     // Loop through only the active lights for this frame.
     for (var i: u32 = 0u; i < uniforms.light_count; i = i + 1u) {

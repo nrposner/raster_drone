@@ -2,11 +2,6 @@ use std::borrow::Cow;
 use egui_wgpu::wgpu;
 use egui_winit::winit::{self, event::{Event, WindowEvent}, event_loop::EventLoop, window::Window};
 use std::sync::Arc;
-// use winit::{
-//     event::{Event, WindowEvent},
-//     event_loop::{EventLoop},
-//     window::Window,
-// };
 use egui_wgpu::Renderer as EguiRenderer;
 use egui_winit::State as EguiState;
 
@@ -28,11 +23,17 @@ const MAX_LIGHTS: u64 = 65535;
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct ShaderUniforms {
     resolution: [f32; 2],
+    // 8 bytes of padding is needed here to align `light_color` to a 16-byte boundary.
+    // `resolution` is 8 bytes, so we add 8 more to reach 16.
+    _padding0: [u32; 2],
     light_color: [f32; 3],
-    _padding1: u32, // WGPU requires structs to be aligned to 16 bytes.
+    // `_padding1` correctly aligns the next member to a 4-byte boundary.
+    _padding1: u32,
     light_radius: f32,
     light_intensity: f32,
     light_count: u32,
+    // The total size of the struct must be a multiple of 16.
+    // We are at 44 bytes, so this final padding takes us to 48.
     _padding2: u32,
 }
 
@@ -460,6 +461,7 @@ pub async fn run_app() {
                         // --- 2. Update GPU Buffers ---
                         let uniforms = ShaderUniforms {
                             resolution: [render_state.size.width as f32, render_state.size.height as f32],
+                            _padding0: [0, 0],
                             light_color: app_state.visual_params.light_color,
                             _padding1: 0,
                             light_radius: app_state.visual_params.light_radius,

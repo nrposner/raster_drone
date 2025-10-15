@@ -16,14 +16,10 @@ bytemuck = "1.24.0"
 image = { version = "0.25.8", features = ["png"] }
 pyo3 = "0.23.3"
 rfd = "0.15.4"
-
 egui = "0.27"
 egui-wgpu = "0.27"
 egui-winit = "0.27"
 pollster = "0.3"
-
-
-# NEW: Add wgpu explicitly to enable its backend features
 wgpu = { version = "0.19.4", features = [
     "metal",    # For macOS
 ]}
