@@ -378,6 +378,25 @@ fn run_sampling_stage(
     }
 }
 
+/// Helper function to encapsulate the file loading logic.
+fn ui_load_image_button(ui: &mut egui::Ui, app_state: &mut AppState) {
+    if ui.button("Load Image...").clicked() {
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("Image Files", &["png", "jpg", "jpeg"])
+            .pick_file()
+        {
+            match image::open(path) {
+                Ok(img) => {
+                    app_state.image = Some(img);
+                    // Invalidate the cache to force the expensive pipeline to re-run on the next frame.
+                    // This is a simple way to signal that a major data source has changed.
+                    app_state.cached_preprocessing_params.use_bradley = !app_state.preprocessing_params.use_bradley;
+                }
+                Err(e) => eprintln!("Failed to open image: {}", e),
+            }
+        }
+    }
+}
 
 pub async fn run_app() {
     // --- Basic Setup ---
@@ -389,10 +408,6 @@ pub async fn run_app() {
         .unwrap());
 
     // --- State Initialization ---
-    // The RenderState is created with a lifetime tied to the `window`.
-    // By creating them here and `move`ing them into the event loop,
-    // we ensure they both live for the entire duration of the application.
-    // This is the key to avoiding the lifetime issues you've encountered.
     let mut render_state = RenderState::new(Arc::clone(&window)).await;
     let mut app_state = AppState::new();
 
@@ -412,7 +427,7 @@ pub async fn run_app() {
         1,    // msaa_samples
     );
 
-    // Initial run of the pipelines
+    // Initial run of the pipelines - will produce empty results since no image is loaded.
     app_state.intermediate_coords = run_preprocessing_stage(&app_state.preprocessing_params, &app_state.image);
     app_state.final_light_coords = run_sampling_stage(&app_state.sampling_params, app_state.intermediate_coords.clone());
 
@@ -421,8 +436,6 @@ pub async fn run_app() {
     event_loop.run(move |event, elwt| {
         match event {
             Event::WindowEvent { window_id, event } if window_id == window.id() => {
-                // Let egui handle the event first. If it consumes the event,
-                // we don't process it further.
                 let response = egui_state.on_window_event(&window, &event);
                 if response.consumed {
                     return;
@@ -433,137 +446,139 @@ pub async fn run_app() {
                     WindowEvent::Resized(physical_size) => {
                         render_state.resize(physical_size);
                     }
-                    WindowEvent::ScaleFactorChanged { .. } => {
-                        // Winit automatically handles DPI changes for Resized,
-                        // so we just need to let egui know.
-                        // egui_state.set_scale_factor(new_inner_size.width as f32, new_inner_size.height as f32);
-                    }
+                    WindowEvent::ScaleFactorChanged { .. } => {}
                     WindowEvent::RedrawRequested => {
-                        // --- 1. Update Pipelines if Params Changed ---
-                        let mut force_resample = false;
-                        if app_state.preprocessing_params != app_state.cached_preprocessing_params {
-                            app_state.intermediate_coords = run_preprocessing_stage(
-                                &app_state.preprocessing_params,
-                                &app_state.image
-                            );
-                            app_state.cached_preprocessing_params = app_state.preprocessing_params;
-                            force_resample = true; // Pre-processing changed, so sampling must re-run
-                        }
-
-                        if force_resample || app_state.sampling_params != app_state.cached_sampling_params {
-                            app_state.final_light_coords = run_sampling_stage(
-                                &app_state.sampling_params,
-                                app_state.intermediate_coords.clone() // Cloning is cheap here
-                            );
-                            app_state.cached_sampling_params = app_state.sampling_params;
-                        }
-
-                        // --- 2. Update GPU Buffers ---
-                        let uniforms = ShaderUniforms {
-                            resolution: [render_state.size.width as f32, render_state.size.height as f32],
-                            _padding0: [0, 0],
-                            light_color: app_state.visual_params.light_color,
-                            _padding1: 0,
-                            light_radius: app_state.visual_params.light_radius,
-                            light_intensity: app_state.visual_params.light_intensity,
-                            light_count: app_state.final_light_coords.len() as u32,
-                            _padding2: 0,
-                        };
-                        render_state.queue.write_buffer(&render_state.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
-
-                        // Convert coordinates to flat f32 array for the shader
-                        let light_data: Vec<[f32; 2]> = app_state.final_light_coords.iter()
-                            .map(|coord| [coord.x() as f32, coord.y() as f32])
-                            .collect();
-                        render_state.queue.write_buffer(&render_state.lights_storage_buffer, 0, bytemuck::cast_slice(&light_data));
-
-
-                        // --- 3. Egui Frame ---
+                        // --- Egui Frame ---
                         let raw_input = egui_state.take_egui_input(&window);
                         egui_ctx.begin_frame(raw_input);
 
-                        // Define your UI here
-                        egui::Window::new("Controls").show(&egui_ctx, |ui| {
-                            ui.heading("Preprocessing");
-                            ui.add(egui::Slider::new(&mut app_state.preprocessing_params.global_threshold, 0.0..=1.0).text("Global Threshold"));
-                            ui.checkbox(&mut app_state.preprocessing_params.use_bradley, "Use Bradley Thresholding");
-                            
-                            ui.separator();
+                        // --- Conditional UI: Show waiting screen or main controls ---
+                        if app_state.image.is_some() {
+                            egui::Window::new("Controls").show(&egui_ctx, |ui| {
+                                ui_load_image_button(ui, &mut app_state);
+                                ui.separator();
+                                ui.heading("Preprocessing");
+                                ui.add(egui::Slider::new(&mut app_state.preprocessing_params.global_threshold, 0.0..=1.0).text("Global Threshold"));
+                                ui.checkbox(&mut app_state.preprocessing_params.use_bradley, "Use Bradley Thresholding");
+                                
+                                ui.separator();
 
-                            ui.heading("Sampling");
-                            ui.add(egui::Slider::new(&mut app_state.sampling_params.sample_count, 0..=5000).text("Sample Count"));
-                            
-                            ui.separator();
+                                ui.heading("Sampling");
+                                ui.add(egui::Slider::new(&mut app_state.sampling_params.sample_count, 0..=5000).text("Sample Count"));
+                                
+                                ui.separator();
 
-                            ui.heading("Visuals");
-                            ui.add(egui::Slider::new(&mut app_state.visual_params.light_radius, 1.0..=100.0).text("Light Radius"));
-                            ui.add(egui::Slider::new(&mut app_state.visual_params.light_intensity, 0.1..=5.0).text("Light Intensity"));
-                            ui.color_edit_button_rgb(&mut app_state.visual_params.light_color);
-                        });
+                                ui.heading("Visuals");
+                                ui.add(egui::Slider::new(&mut app_state.visual_params.light_radius, 1.0..=100.0).text("Light Radius"));
+                                ui.add(egui::Slider::new(&mut app_state.visual_params.light_intensity, 0.1..=5.0).text("Light Intensity"));
+                                ui.color_edit_button_rgb(&mut app_state.visual_params.light_color);
+                            });
+                        } else {
+                            egui::CentralPanel::default().show(&egui_ctx, |ui| {
+                                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                                    ui.add_space(ui.available_height() * 0.4);
+                                    ui.heading("Drone Light Show Previewer");
+                                    ui.label("Please load an image to begin.");
+                                    ui.add_space(10.0);
+                                    ui_load_image_button(ui, &mut app_state);
+                                });
+                            });
+                        }
                         
                         let egui_output = egui_ctx.end_frame();
-
-                        // --- 4. Get Surface Texture for Drawing ---
+                        let paint_jobs = egui_ctx.tessellate(egui_output.shapes, window.scale_factor() as f32);
+                        
+                        // --- Get Surface Texture for Drawing ---
                         let output_frame = match render_state.surface.get_current_texture() {
                             Ok(frame) => frame,
-                            Err(e) => {
-                                eprintln!("Dropped frame: {:?}", e);
-                                return;
-                            }
+                            Err(e) => { eprintln!("Dropped frame: {:?}", e); return; }
                         };
                         let output_view = output_frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-                        // --- 5. Record Rendering Commands ---
-                        let mut encoder = render_state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                            label: Some("Render Encoder"),
-                        });
-
-                        // Upload Egui draw data to the GPU
+                        // --- Record Rendering Commands ---
+                        let mut encoder = render_state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
                         let screen_descriptor = egui_wgpu::ScreenDescriptor {
                             size_in_pixels: [render_state.config.width, render_state.config.height],
                             pixels_per_point: window.scale_factor() as f32,
                         };
-                        let paint_jobs = egui_ctx.tessellate(egui_output.shapes, screen_descriptor.pixels_per_point);
 
-                        egui_renderer.update_buffers(&render_state.device, &render_state.queue, &mut encoder, &paint_jobs, &screen_descriptor);
-                        
-                        { // Scoped to drop render_pass
-                            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("Main Render Pass"),
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view: &output_view,
-                                    resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                                        store: wgpu::StoreOp::Store,
-                                    },
-                                })],
-                                depth_stencil_attachment: None,
-                                timestamp_writes: None,
-                                occlusion_query_set: None,
-                            });
+                        // --- Conditional Rendering Logic ---
+                        if app_state.image.is_some() {
+                            // --- Update Pipelines if Params Changed ---
+                            let mut force_resample = false;
+                            if app_state.preprocessing_params != app_state.cached_preprocessing_params {
+                                app_state.intermediate_coords = run_preprocessing_stage(&app_state.preprocessing_params, &app_state.image);
+                                app_state.cached_preprocessing_params = app_state.preprocessing_params;
+                                force_resample = true;
+                            }
+
+                            if force_resample || app_state.sampling_params != app_state.cached_sampling_params {
+                                app_state.final_light_coords = run_sampling_stage(&app_state.sampling_params, app_state.intermediate_coords.clone());
+                                app_state.cached_sampling_params = app_state.sampling_params;
+                            }
+
+                            // --- Update GPU Buffers for Lights Shader ---
+                            let uniforms = ShaderUniforms {
+                                resolution: [render_state.size.width as f32, render_state.size.height as f32],
+                                _padding0: [0, 0],
+                                light_color: app_state.visual_params.light_color,
+                                _padding1: 0,
+                                light_radius: app_state.visual_params.light_radius,
+                                light_intensity: app_state.visual_params.light_intensity,
+                                light_count: app_state.final_light_coords.len() as u32,
+                                _padding2: 0,
+                            };
+                            render_state.queue.write_buffer(&render_state.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+
+                            let light_data: Vec<[f32; 2]> = app_state.final_light_coords.iter()
+                                .map(|coord| [coord.x() as f32, coord.y() as f32])
+                                .collect();
+                            render_state.queue.write_buffer(&render_state.lights_storage_buffer, 0, bytemuck::cast_slice(&light_data));
                             
-                            // Render your custom background shader FIRST
-                            render_pass.set_pipeline(&render_state.render_pipeline);
-                            render_pass.set_bind_group(0, &render_state.bind_group, &[]);
-                            render_pass.draw(0..3, 0..1); // Draw a single triangle that covers the screen
-
-                            // Render the Egui UI on TOP
-                            egui_renderer.render(&mut render_pass, &paint_jobs, &screen_descriptor);
+                            // --- Render Lights + UI ---
+                            egui_renderer.update_buffers(&render_state.device, &render_state.queue, &mut encoder, &paint_jobs, &screen_descriptor);
+                            {
+                                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                    label: Some("Main Render Pass"),
+                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                        view: &output_view,
+                                        resolve_target: None,
+                                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                                    })],
+                                    depth_stencil_attachment: None, timestamp_writes: None, occlusion_query_set: None,
+                                });
+                                render_pass.set_pipeline(&render_state.render_pipeline);
+                                render_pass.set_bind_group(0, &render_state.bind_group, &[]);
+                                render_pass.draw(0..3, 0..1);
+                                egui_renderer.render(&mut render_pass, &paint_jobs, &screen_descriptor);
+                            }
+                        } else {
+                            // --- Render Egui Waiting Screen ONLY ---
+                            egui_renderer.update_buffers(&render_state.device, &render_state.queue, &mut encoder, &paint_jobs, &screen_descriptor);
+                            {
+                                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                    label: Some("Waiting Screen Pass"),
+                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                        view: &output_view,
+                                        resolve_target: None,
+                                        // Clear with a dark gray instead of black
+                                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.1, b: 0.12, a: 1.0 }), store: wgpu::StoreOp::Store },
+                                    })],
+                                    depth_stencil_attachment: None, timestamp_writes: None, occlusion_query_set: None,
+                                });
+                                egui_renderer.render(&mut render_pass, &paint_jobs, &screen_descriptor);
+                            }
                         }
-
-
-                        // --- 6. Submit and Present ---
+                        
+                        // --- Submit and Present ---
                         render_state.queue.submit(std::iter::once(encoder.finish()));
                         output_frame.present();
-                        
                         egui_state.handle_platform_output(&window, egui_output.platform_output);
                     }
                     _ => {}
                 }
             }
             Event::AboutToWait => {
-                // Request a redraw continuously for animations or real-time updates.
                 window.request_redraw();
             }
             _ => (),
