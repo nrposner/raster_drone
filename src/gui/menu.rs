@@ -1,5 +1,12 @@
 use crate::gui::app::AppState;
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum ResizeOption {
+    None,
+    Size256,
+    Size512,
+    Size1024,
+}
 
 /// Helper function to encapsulate the file loading logic.
 pub fn ui_load_image_button(ui: &mut egui::Ui, app_state: &mut AppState) {
@@ -25,16 +32,70 @@ pub fn ui_load_image_button(ui: &mut egui::Ui, app_state: &mut AppState) {
 pub fn create_slider_menu(app_state: &mut AppState, egui_ctx: &egui::Context) {
     egui::Window::new("Controls").show(egui_ctx, |ui| {
         ui_load_image_button(ui, app_state);
+        // ui.separator();
+        // ui.heading("Preprocessing");
+        // ui.add(egui::Slider::new(
+        //     &mut app_state.preprocessing_params.global_threshold, 
+        //     0.0..=1.0
+        // ).text("Global Threshold"));
+
         ui.separator();
-        ui.heading("Preprocessing");
-        ui.add(egui::Slider::new(
-            &mut app_state.preprocessing_params.global_threshold, 
-            0.0..=1.0
-        ).text("Global Threshold"));
+
         ui.checkbox(
             &mut app_state.preprocessing_params.use_bradley,
             "Use Bradley Thresholding"
         );
+
+        if app_state.preprocessing_params.use_bradley {
+
+            ui.heading("Bradley Thresholding");
+            ui.add(egui::Slider::new(
+                &mut app_state.preprocessing_params.bradley_threshold,
+                1..=100
+            ).text("Brightness threshold"));
+
+            ui.heading("Bradley Size");
+            ui.add(egui::Slider::new(
+                &mut app_state.preprocessing_params.bradley_size,
+                1..=200
+            ).text("Window Size"));
+        }
+
+        ui.separator();
+
+        let mut selected_resize = match app_state.preprocessing_params.resize {
+            None => ResizeOption::None,
+            Some((256, 256)) => ResizeOption::Size256,
+            Some((528, 528)) => ResizeOption::Size512,
+            Some((1024, 1024)) => ResizeOption::Size1024,
+            _ => ResizeOption::Size256, // our default option
+        };
+
+        // Helper to get display text for the selected option.
+        let selected_text = match selected_resize {
+            ResizeOption::None => "None",
+            ResizeOption::Size256 => "256x256",
+            ResizeOption::Size512 => "512x512",
+            ResizeOption::Size1024 => "1024x1024",
+        };
+
+        ui.label("Resize Image");
+        egui::ComboBox::from_id_source("resize_combo")
+            .selected_text(selected_text)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut selected_resize, ResizeOption::None, "None");
+                ui.selectable_value(&mut selected_resize, ResizeOption::Size256, "256x256");
+                ui.selectable_value(&mut selected_resize, ResizeOption::Size512, "512x512");
+                ui.selectable_value(&mut selected_resize, ResizeOption::Size1024, "1024x1024");
+            });
+
+        // 4. After the UI has been drawn, convert the enum back to the data model.
+        app_state.preprocessing_params.resize = match selected_resize {
+            ResizeOption::None => None,
+            ResizeOption::Size256 => Some((256, 256)),
+            ResizeOption::Size512 => Some((512, 512)),
+            ResizeOption::Size1024 => Some((1024, 1024)),
+        };
         
         ui.separator();
 

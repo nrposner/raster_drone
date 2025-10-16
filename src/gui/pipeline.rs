@@ -9,11 +9,11 @@ use crate::utils::{Coordinate, CoordinateOutput};
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct PreprocessingParams {
     img_type: ImgType,
-    resize: Option<(u32, u32)>,
+    pub resize: Option<(u32, u32)>,
     pub global_threshold: f32,
     pub use_bradley: bool,
-    bradley_size: u32,
-    bradley_threshold: u8,
+    pub bradley_size: u32,
+    pub bradley_threshold: u8,
 }
 
 impl Default for PreprocessingParams {
