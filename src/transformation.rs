@@ -1,6 +1,7 @@
 use pyo3::{exceptions::PyValueError, prelude::*};
-use crate::utils::Coordinate;
 use image::{DynamicImage, GenericImageView};
+
+use crate::utils::Coordinate;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ImgType {

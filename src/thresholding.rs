@@ -1,9 +1,3 @@
-// adaptive mean, adaptive gaussian?
-//
-// is this a good fit for 
-//
-// so far, only doing global
-
 use image::{GrayImage, Luma};
 
 
@@ -92,14 +86,4 @@ pub fn bradley_adaptive_threshold(image: &GrayImage, s: u32, t: u8) -> GrayImage
 
     output_image
 }
-
-
-
-
-
-
-
-
-
-
 

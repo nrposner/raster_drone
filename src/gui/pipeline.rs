@@ -2,13 +2,17 @@ use std::borrow::Cow;
 
 use image::{DynamicImage, GenericImageView};
 
-use crate::{sampling::{farthest_point_sampling, grid_sampling}, thresholding::bradley_adaptive_threshold, transformation::{image_to_coordinates, ImgType}};
-use crate::raster::SamplingType;
-use crate::utils::{Coordinate, CoordinateOutput};
+use crate::{
+    sampling::{farthest_point_sampling, grid_sampling}, 
+    thresholding::bradley_adaptive_threshold, 
+    transformation::{image_to_coordinates, ImgType},
+    raster::SamplingType,
+    utils::{Coordinate, CoordinateOutput},
+};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct PreprocessingParams {
-    img_type: ImgType,
+    pub img_type: ImgType,
     pub resize: Option<(u32, u32)>,
     pub global_threshold: f32,
     pub use_bradley: bool,

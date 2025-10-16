@@ -1,11 +1,20 @@
 use egui_wgpu::wgpu;
-use egui_winit::winit::{self, event::{Event, WindowEvent}, event_loop::EventLoop, window::Window};
+use egui_winit::winit::{
+    self, 
+    event::{Event, WindowEvent}, 
+    event_loop::EventLoop, 
+    window::Window
+};
 use std::sync::Arc;
 use egui_wgpu::Renderer as EguiRenderer;
 use egui_winit::State as EguiState;
 
-use crate::gui::{menu::{populate_slider_menu, populate_upload_menu}, pipeline::{run_preprocessing_stage, run_sampling_stage, PreprocessingParams, SamplingParams}};
-use crate::utils::{Coordinate, CoordinateOutput};
+use crate::{
+    gui::{
+        menu::{populate_slider_menu, populate_upload_menu}, 
+        pipeline::{run_preprocessing_stage, run_sampling_stage, PreprocessingParams, SamplingParams} 
+    }, 
+    utils::{Coordinate, CoordinateOutput}};
 
 // Shader code is embedded directly into the binary for simplicity.
 const SHADER_CODE: &str = include_str!("lights.wgsl");
