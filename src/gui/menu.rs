@@ -66,7 +66,7 @@ pub fn create_slider_menu(app_state: &mut AppState, egui_ctx: &egui::Context) {
         let mut selected_resize = match app_state.preprocessing_params.resize {
             None => ResizeOption::None,
             Some((256, 256)) => ResizeOption::Size256,
-            Some((528, 528)) => ResizeOption::Size512,
+            Some((512, 512)) => ResizeOption::Size512,
             Some((1024, 1024)) => ResizeOption::Size1024,
             _ => ResizeOption::Size256, // our default option
         };
