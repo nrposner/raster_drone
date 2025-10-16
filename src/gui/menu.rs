@@ -1,4 +1,4 @@
-use crate::gui::app::AppState;
+use crate::{gui::app::AppState, transformation::ImgType};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum ResizeOption {
@@ -109,6 +109,23 @@ pub fn populate_slider_menu(app_state: &mut AppState, ui: &mut egui::Ui) {
         0.1..=5.0
     ).text("Light Intensity"));
     ui.color_edit_button_rgb(&mut app_state.visual_params.light_color);
+
+    ui.separator();
+
+    let mut selected_contrast = match app_state.preprocessing_params.img_type {
+        ImgType::BlackOnWhite => false,
+        ImgType::WhiteOnBlack => true,
+    };
+
+    ui.checkbox(
+        &mut selected_contrast, 
+        "Flip Contrast"
+    );
+
+    app_state.preprocessing_params.img_type = match selected_contrast {
+        false => ImgType::BlackOnWhite,
+        true => ImgType::WhiteOnBlack,
+    }
 }
 
 pub fn populate_upload_menu(app_state: &mut AppState, ui: &mut egui::Ui) {
