@@ -22,7 +22,7 @@ pub fn ui_load_image_button(ui: &mut egui::Ui, app_state: &mut AppState) {
 }
 
 
-pub fn create_menu(app_state: &mut AppState, egui_ctx: &egui::Context) {
+pub fn create_slider_menu(app_state: &mut AppState, egui_ctx: &egui::Context) {
     egui::Window::new("Controls").show(egui_ctx, |ui| {
         ui_load_image_button(ui, app_state);
         ui.separator();
@@ -58,3 +58,18 @@ pub fn create_menu(app_state: &mut AppState, egui_ctx: &egui::Context) {
         ui.color_edit_button_rgb(&mut app_state.visual_params.light_color);
     });
 }
+
+pub fn create_upload_menu(app_state: &mut AppState, egui_ctx: &egui::Context) {
+    egui::CentralPanel::default().show(egui_ctx, |ui| {
+        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+            ui.add_space(ui.available_height() * 0.4);
+            ui.heading("Drone Light Show Previewer");
+            ui.label("Please load an image to begin.");
+            ui.add_space(10.0);
+            ui_load_image_button(ui, app_state);
+        });
+    });
+}
+
+
+

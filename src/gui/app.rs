@@ -4,7 +4,7 @@ use std::sync::Arc;
 use egui_wgpu::Renderer as EguiRenderer;
 use egui_winit::State as EguiState;
 
-use crate::gui::{menu::{create_menu, ui_load_image_button}, pipeline::{run_preprocessing_stage, run_sampling_stage, PreprocessingParams, SamplingParams}};
+use crate::gui::{menu::{create_slider_menu, create_upload_menu}, pipeline::{run_preprocessing_stage, run_sampling_stage, PreprocessingParams, SamplingParams}};
 use crate::utils::{Coordinate, CoordinateOutput};
 
 // Shader code is embedded directly into the binary for simplicity.
@@ -259,8 +259,6 @@ impl AppState {
 }
 
 
-
-
 pub async fn run_app() {
     // --- Basic Setup ---
     let event_loop = EventLoop::new().unwrap();
@@ -312,17 +310,9 @@ pub async fn run_app() {
 
                         // --- Conditional UI: Show waiting screen or main controls ---
                         if app_state.image.is_some() {
-                            create_menu(&mut app_state, &egui_ctx);
+                            create_slider_menu(&mut app_state, &egui_ctx);
                         } else {
-                            egui::CentralPanel::default().show(&egui_ctx, |ui| {
-                                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                                    ui.add_space(ui.available_height() * 0.4);
-                                    ui.heading("Drone Light Show Previewer");
-                                    ui.label("Please load an image to begin.");
-                                    ui.add_space(10.0);
-                                    ui_load_image_button(ui, &mut app_state);
-                                });
-                            });
+                            create_upload_menu(&mut app_state, &egui_ctx);
                         }
                         
                         let egui_output = egui_ctx.end_frame();
