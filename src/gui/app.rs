@@ -1,14 +1,10 @@
-use std::borrow::Cow;
 use egui_wgpu::wgpu;
 use egui_winit::winit::{self, event::{Event, WindowEvent}, event_loop::EventLoop, window::Window};
 use std::sync::Arc;
 use egui_wgpu::Renderer as EguiRenderer;
 use egui_winit::State as EguiState;
 
-use image::{DynamicImage, GenericImageView};
-
-use crate::{sampling::{farthest_point_sampling, grid_sampling}, thresholding::bradley_adaptive_threshold, transformation::{image_to_coordinates, ImgType}};
-use crate::raster::SamplingType;
+use crate::gui::pipeline::{run_preprocessing_stage, run_sampling_stage, PreprocessingParams, SamplingParams};
 use crate::utils::{Coordinate, CoordinateOutput};
 
 // Shader code is embedded directly into the binary for simplicity.
@@ -36,43 +32,6 @@ struct ShaderUniforms {
 
 // --- Tiered Pipeline Parameters ---
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-struct PreprocessingParams {
-    img_type: ImgType,
-    resize: Option<(u32, u32)>,
-    global_threshold: f32,
-    use_bradley: bool,
-    bradley_size: u32,
-    bradley_threshold: u8,
-}
-
-impl Default for PreprocessingParams {
-    fn default() -> Self {
-        Self {
-            img_type: ImgType::BlackOnWhite,
-            resize: Some((256, 256)),
-            global_threshold: 0.01,
-            use_bradley: false,
-            bradley_size: 50,
-            bradley_threshold: 15,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-struct SamplingParams {
-    sample_count: u32,
-    sampling_type: SamplingType,
-}
-
-impl Default for SamplingParams {
-    fn default() -> Self {
-        Self {
-            sample_count: 30,
-            sampling_type: SamplingType::Farthest,
-        }
-    }
-}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 struct VisualParams {
@@ -93,7 +52,7 @@ impl Default for VisualParams {
 
 // This struct manages all the wgpu-related state.
 struct RenderState<'a> {
-    window: Arc<Window>, // Store the Arc to keep the window alive
+    _window: Arc<Window>, // Store the Arc to keep the window alive
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -106,11 +65,11 @@ struct RenderState<'a> {
 }
 
 impl<'a> RenderState<'a> {
-    async fn new(window: Arc<Window>) -> Self {
-        let size = window.inner_size();
+    async fn new(_window: Arc<Window>) -> Self {
+        let size = _window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
-        let surface = instance.create_surface(window.clone()).unwrap();
+        let surface = instance.create_surface(_window.clone()).unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -245,7 +204,7 @@ impl<'a> RenderState<'a> {
         });
 
         Self {
-            window,
+            _window,
             surface,
             device,
             queue,
@@ -300,78 +259,6 @@ impl AppState {
 }
 
 
-/// Takes pre-processing params, loads/processes an image, returns all valid coordinates.
-fn run_preprocessing_stage<'a>(
-    params: &PreprocessingParams,
-    image: &'a Option<image::DynamicImage>,
-) -> Option<CoordinateOutput> {
-    // println!("Rerunning EXPENSIVE pre-processing stage...");
-    
-    // If no image is loaded, there are no coordinates to return.
-    let Some(source_img) = image else {
-        return None
-    };
-
-    // using a CoW pointer to avoid cloning unless necessary down the line
-    let mut img_cow: Cow<'a, DynamicImage> = Cow::Borrowed(source_img);
-
-    if params.use_bradley {
-        img_cow = Cow::Owned(DynamicImage::ImageLuma8(bradley_adaptive_threshold(
-            &img_cow.to_luma8(),
-            params.bradley_size,
-            params.bradley_threshold,
-        )));
-    }
-    
-    if let Some((width, height)) = params.resize {
-        // .thumbnail() takes a reference, so we pass our Cow's content.
-        img_cow = Cow::Owned(img_cow.thumbnail(width, height));
-    }
-
-    let (image_width, image_height) = img_cow.dimensions();
-
-    let initial_coords = image_to_coordinates(&img_cow, params.global_threshold, params.img_type);
-
-    Some(
-        CoordinateOutput::new(
-            initial_coords,
-            image_width,
-            image_height,
-        )
-    )
-}
-
-
-/// Takes sampling params and the full coordinate set, returns the final sample.
-fn run_sampling_stage(
-    params: &SamplingParams,
-    intermediate_coords: Option<CoordinateOutput>,
-) -> Vec<Coordinate> {
-    // println!("Rerunning CHEAP sampling stage...");
-    // This is where you would apply your grid, farthest-point, etc., sampling
-    // algorithm to the `intermediate_coords`.
-
-    let initial_coords = if let Some(coords) = intermediate_coords {
-        coords.coords()
-    } else {
-        vec![]
-    };
-
-    // if the initial coordinates set is less than the supplied number of points,
-    // don't sample and just return the whole thing
-    if initial_coords.len() <= params.sample_count.try_into().unwrap() {
-        initial_coords
-    } else {
-        match params.sampling_type {
-            SamplingType::Farthest => {
-                farthest_point_sampling(&initial_coords, params.sample_count)
-            },
-            SamplingType::Grid => {
-                grid_sampling(&initial_coords, params.sample_count)
-            }
-        }
-    }
-}
 
 /// Helper function to encapsulate the file loading logic.
 fn ui_load_image_button(ui: &mut egui::Ui, app_state: &mut AppState) {
@@ -622,6 +509,18 @@ pub async fn run_app() {
                                 egui_renderer.render(&mut render_pass, &paint_jobs, &screen_descriptor);
                             }
                         } else {
+                            // --- Pre-warm Shader and Render Egui Waiting Screen ---
+                            let uniforms = ShaderUniforms {
+                                resolution: [render_state.size.width as f32, render_state.size.height as f32],
+                                _padding0: [0,0],
+                                light_color: [0.0, 0.0, 0.0],
+                                light_radius: 0.0,
+                                light_intensity: 0.0,
+                                light_count: 0, // CRUCIAL: Tell shader to do nothing.
+                                _padding1: [0,0],
+                            };
+                            render_state.queue.write_buffer(&render_state.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+
                             // --- Render Egui Waiting Screen ONLY ---
                             egui_renderer.update_buffers(
                                 &render_state.device, 

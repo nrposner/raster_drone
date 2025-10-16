@@ -3,7 +3,6 @@ mod transformation;
 mod utils;
 mod sampling;
 mod thresholding;
-mod app;
 
 use pyo3::{exceptions::PyValueError, prelude::*};
 use image::DynamicImage;

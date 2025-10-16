@@ -12,6 +12,7 @@ use crate::utils::Coordinate;
 ///
 /// # Returns
 /// A `GrayImage` (grayscale image buffer).
+#[allow(dead_code)]
 pub fn coordinates_to_image(
     width: u32, 
     height: u32, 

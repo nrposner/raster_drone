@@ -3,9 +3,9 @@ mod transformation;
 mod utils;
 mod sampling;
 mod thresholding;
-mod app;
+mod gui;
 
-use app::run_app;
+use gui::app::run_app;
 
 fn main() {
     // You might want to add logging initialization here, e.g., `env_logger::init();`
