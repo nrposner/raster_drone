@@ -108,6 +108,8 @@ pub fn populate_slider_menu(app_state: &mut AppState, ui: &mut egui::Ui) {
         &mut app_state.visual_params.light_intensity, 
         0.1..=5.0
     ).text("Light Intensity"));
+
+    ui.label("Color");
     ui.color_edit_button_rgb(&mut app_state.visual_params.light_color);
 
     ui.separator();
