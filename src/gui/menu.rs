@@ -30,7 +30,7 @@ pub fn ui_load_image_button(ui: &mut egui::Ui, app_state: &mut AppState) {
 
 
 pub fn create_slider_menu(app_state: &mut AppState, egui_ctx: &egui::Context) {
-    egui::Window::new("Controls").show(egui_ctx, |ui| {
+    egui::SidePanel::right("Controls").show(egui_ctx, |ui| {
         ui_load_image_button(ui, app_state);
         // ui.separator();
         // ui.heading("Preprocessing");
