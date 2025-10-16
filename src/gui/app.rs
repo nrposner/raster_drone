@@ -4,7 +4,7 @@ use std::sync::Arc;
 use egui_wgpu::Renderer as EguiRenderer;
 use egui_winit::State as EguiState;
 
-use crate::gui::pipeline::{run_preprocessing_stage, run_sampling_stage, PreprocessingParams, SamplingParams};
+use crate::gui::{menu::{create_menu, ui_load_image_button}, pipeline::{run_preprocessing_stage, run_sampling_stage, PreprocessingParams, SamplingParams}};
 use crate::utils::{Coordinate, CoordinateOutput};
 
 // Shader code is embedded directly into the binary for simplicity.
@@ -18,14 +18,14 @@ const MAX_LIGHTS: u64 = 65535;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct ShaderUniforms {
-    resolution: [f32; 2],
+    pub resolution: [f32; 2],
     // Pad from offset 8 to 16 for vec3<f32> alignment in WGSL.
     _padding0: [u32; 2],
-    light_color: [f32; 3],
+    pub light_color: [f32; 3],
     // The following fields are all 4-byte aligned and can follow each other.
-    light_radius: f32,
-    light_intensity: f32,
-    light_count: u32,
+    pub light_radius: f32,
+    pub light_intensity: f32,
+    pub light_count: u32,
     // Pad struct to be a multiple of 16 bytes for uniform buffer binding.
     _padding1: [u32; 2],
 }
@@ -34,10 +34,10 @@ struct ShaderUniforms {
 
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-struct VisualParams {
-    light_radius: f32,
-    light_intensity: f32,
-    light_color: [f32; 3],
+pub struct VisualParams {
+    pub light_radius: f32,
+    pub light_intensity: f32,
+    pub light_color: [f32; 3],
 }
 
 impl Default for VisualParams {
@@ -228,19 +228,19 @@ impl<'a> RenderState<'a> {
 }
 
 // This is the main application state, now with tiered parameters and caching.
-struct AppState {
+pub struct AppState {
     // --- Parameters ---
-    preprocessing_params: PreprocessingParams,
-    cached_preprocessing_params: PreprocessingParams,
-    sampling_params: SamplingParams,
-    cached_sampling_params: SamplingParams,
-    visual_params: VisualParams,
+    pub preprocessing_params: PreprocessingParams,
+    pub cached_preprocessing_params: PreprocessingParams,
+    pub sampling_params: SamplingParams,
+    pub cached_sampling_params: SamplingParams,
+    pub visual_params: VisualParams,
 
     // --- Data ---
     // The raw image data is now stored in memory after being loaded.
-    image: Option<image::DynamicImage>,
-    intermediate_coords: Option<CoordinateOutput>,
-    final_light_coords: Vec<Coordinate>,
+    pub image: Option<image::DynamicImage>,
+    pub intermediate_coords: Option<CoordinateOutput>,
+    pub final_light_coords: Vec<Coordinate>,
 }
 
 impl AppState {
@@ -260,25 +260,6 @@ impl AppState {
 
 
 
-/// Helper function to encapsulate the file loading logic.
-fn ui_load_image_button(ui: &mut egui::Ui, app_state: &mut AppState) {
-    if ui.button("Load Image...").clicked() {
-        if let Some(path) = rfd::FileDialog::new()
-            .add_filter("Image Files", &["png", "jpg", "jpeg"])
-            .pick_file()
-        {
-            match image::open(path) {
-                Ok(img) => {
-                    app_state.image = Some(img);
-                    // Invalidate the cache to force the expensive pipeline to re-run on the next frame.
-                    // This is a simple way to signal that a major data source has changed.
-                    app_state.cached_preprocessing_params.use_bradley = !app_state.preprocessing_params.use_bradley;
-                }
-                Err(e) => eprintln!("Failed to open image: {}", e),
-            }
-        }
-    }
-}
 
 pub async fn run_app() {
     // --- Basic Setup ---
@@ -331,40 +312,7 @@ pub async fn run_app() {
 
                         // --- Conditional UI: Show waiting screen or main controls ---
                         if app_state.image.is_some() {
-                            egui::Window::new("Controls").show(&egui_ctx, |ui| {
-                                ui_load_image_button(ui, &mut app_state);
-                                ui.separator();
-                                ui.heading("Preprocessing");
-                                ui.add(egui::Slider::new(
-                                    &mut app_state.preprocessing_params.global_threshold, 
-                                    0.0..=1.0
-                                ).text("Global Threshold"));
-                                ui.checkbox(
-                                    &mut app_state.preprocessing_params.use_bradley,
-                                    "Use Bradley Thresholding"
-                                );
-                                
-                                ui.separator();
-
-                                ui.heading("Sampling");
-                                ui.add(egui::Slider::new(
-                                    &mut app_state.sampling_params.sample_count,
-                                    1..=500
-                                ).text("Sample Count"));
-                                
-                                ui.separator();
-
-                                ui.heading("Visuals");
-                                ui.add(egui::Slider::new(
-                                    &mut app_state.visual_params.light_radius, 
-                                    1.0..=20.0
-                                ).text("Light Radius"));
-                                ui.add(egui::Slider::new(
-                                    &mut app_state.visual_params.light_intensity, 
-                                    0.1..=5.0
-                                ).text("Light Intensity"));
-                                ui.color_edit_button_rgb(&mut app_state.visual_params.light_color);
-                            });
+                            create_menu(&mut app_state, &egui_ctx);
                         } else {
                             egui::CentralPanel::default().show(&egui_ctx, |ui| {
                                 ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
