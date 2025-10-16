@@ -28,18 +28,8 @@ pub fn ui_load_image_button(ui: &mut egui::Ui, app_state: &mut AppState) {
     }
 }
 
-
-
-
-
 pub fn populate_slider_menu(app_state: &mut AppState, ui: &mut egui::Ui) {
     ui_load_image_button(ui, app_state);
-    // ui.separator();
-    // ui.heading("Preprocessing");
-    // ui.add(egui::Slider::new(
-    //     &mut app_state.preprocessing_params.global_threshold, 
-    //     0.0..=1.0
-    // ).text("Global Threshold"));
 
     ui.separator();
 
