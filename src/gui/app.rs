@@ -4,7 +4,7 @@ use std::sync::Arc;
 use egui_wgpu::Renderer as EguiRenderer;
 use egui_winit::State as EguiState;
 
-use crate::gui::{menu::{create_slider_menu, create_upload_menu, populate_slider_menu, populate_upload_menu}, pipeline::{run_preprocessing_stage, run_sampling_stage, PreprocessingParams, SamplingParams}};
+use crate::gui::{menu::{populate_slider_menu, populate_upload_menu}, pipeline::{run_preprocessing_stage, run_sampling_stage, PreprocessingParams, SamplingParams}};
 use crate::utils::{Coordinate, CoordinateOutput};
 
 // Shader code is embedded directly into the binary for simplicity.
