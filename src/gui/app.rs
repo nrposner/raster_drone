@@ -327,24 +327,11 @@ pub async fn run_app() {
 
                         // Create the central panel to fill the remaining space.
                         egui::CentralPanel::default()
+                            // make it transparent, otherwise it will draw over
                             .frame(egui::Frame::none())
                             .show(&egui_ctx, |ui| {
-                            // For now, we only get the rectangle. We don't do anything with it.
                             viewport_rect = ui.available_rect_before_wrap();
-                            // You can add a temporary println here to see its values:
-                            // if app_state.image.is_some() { println!("Viewport: {:?}", viewport_rect); }
                         });
-
-                        // The `light_data` and `uniforms` logic below this should remain
-                        // unchanged for now. They will still use the old full-screen logic.
-
-
-                        // // --- Conditional UI: Show waiting screen or main controls ---
-                        // if app_state.image.is_some() {
-                        //     create_slider_menu(&mut app_state, &egui_ctx);
-                        // } else {
-                        //     create_upload_menu(&mut app_state, &egui_ctx);
-                        // }
                         
                         let egui_output = egui_ctx.end_frame();
                         egui_state.handle_platform_output(
@@ -352,7 +339,7 @@ pub async fn run_app() {
                             egui_output.platform_output
                         );
                         
-                        // This is the crucial step: handle texture updates *before* tessellating.
+                        // handle texture updates *before* tessellating.
                         for (id, image_delta) in &egui_output.textures_delta.set {
                             egui_renderer.update_texture(
                                 &render_state.device, 
@@ -416,8 +403,6 @@ pub async fn run_app() {
                                 resolution: [render_state.size.width as f32, render_state.size.height as f32],
                                 viewport_offset: [viewport_rect.min.x * scale_factor, viewport_rect.min.y * scale_factor],
                                 viewport_size: [viewport_rect.size().x * scale_factor, viewport_rect.size().y * scale_factor],
-                                // viewport_offset: [viewport_rect.min.x, viewport_rect.min.y],
-                                // viewport_size: [viewport_rect.size().x, viewport_rect.size().y],
                                 _padding0: [0, 0],
                                 light_color: app_state.visual_params.light_color,
                                 light_radius: app_state.visual_params.light_radius,
@@ -445,19 +430,9 @@ pub async fn run_app() {
 
                                         let x = (coord.x() as f32 / img_w) * viewport_phys_width + viewport_phys_min_x;
                                         let y = (coord.y() as f32 / img_h) * viewport_phys_height + viewport_phys_min_y;
-                                        // let x = (coord.x() as f32 / img_w) * viewport_rect.width() + viewport_rect.min.x;
-                                        // let y = (coord.y() as f32 / img_h) * viewport_rect.height() + viewport_rect.min.y;
                                         [x, y]
                                     })
                                     .collect()
-                                // app_state.final_light_coords.iter()
-                                //     .map(|coord| {
-                                //         // Scale coordinates from image space to screen space
-                                //         let x = (coord.x() as f32 / img_w) * screen_w;
-                                //         let y = (coord.y() as f32 / img_h) * screen_h;
-                                //         [x, y]
-                                //     })
-                                //     .collect()
                             } else {
                                 vec![]
                             };
@@ -504,8 +479,6 @@ pub async fn run_app() {
                                 viewport_offset: [viewport_rect.min.x * scale_factor, viewport_rect.min.y * scale_factor],
                                 viewport_size: [viewport_rect.size().x * scale_factor, viewport_rect.size().y * scale_factor],
                                 
-                                // viewport_offset: [viewport_rect.min.x, viewport_rect.min.y],
-                                // viewport_size: [viewport_rect.size().x, viewport_rect.size().y],
                                 _padding0: [0,0],
                                 light_color: [0.0, 0.0, 0.0],
                                 light_radius: 0.0,
