@@ -1,5 +1,6 @@
 use pyo3::{exceptions::PyValueError, prelude::*};
-use image::{GrayImage, Luma, RgbaImage};
+use image::{GrayImage, Luma, Rgba, RgbaImage};
+use wgpu::core::command::BakedCommands;
 
 use crate::{transformation::ColorCoordinate, utils::Coordinate};
 
@@ -36,18 +37,34 @@ pub fn coordinates_to_image(
     img
 }
 
+pub enum BackgroundColor {
+    White,
+    Black,
+}
 
 pub fn coordinates_to_color_image(
     width: u32, 
     height: u32, 
-    coords: &[ColorCoordinate]
+    coords: &[ColorCoordinate],
+    background_color: BackgroundColor, 
 ) -> RgbaImage {
     // Create a new, all-black grayscale image buffer.
     // `GrayImage` is a type alias for `ImageBuffer<Luma<u8>, Vec<u8>>`.
     let mut img = RgbaImage::new(width, height);
 
-    // // Define the white pixel value. Luma<u8> has one channel from 0 to 255.
-    // let white_pixel = Luma([255u8]);
+    // optionally make the background white instead of black??
+
+    // Define the white pixel value. Luma<u8> has one channel from 0 to 255.
+    let white_pixel = Rgba([255u8; 4]);
+
+    match background_color {
+        BackgroundColor::White => {
+            for pixel in img.pixels_mut() {
+                *pixel = white_pixel;
+            }
+        },
+        BackgroundColor::Black => {}
+    }
 
     // Iterate through the coordinates and "paint" a white pixel at each location.
     for coord in coords {

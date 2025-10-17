@@ -8,7 +8,7 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 use image::DynamicImage;
 
 use crate::{
-    raster::{coordinates_to_color_image, coordinates_to_image, SamplingType}, 
+    raster::{coordinates_to_color_image, coordinates_to_image, BackgroundColor, SamplingType}, 
     sampling::{color_albedo_sampling, farthest_point_sampling, grid_sampling}, 
     thresholding::bradley_adaptive_threshold, 
     transformation::{color_image_to_coordinates, image_to_coordinates, ImgType}, 
@@ -162,11 +162,25 @@ pub fn process_image_to_coordinates(
     )
 }
 
-#[pyfunction(signature=(input_path, n, resize=Some((256, 256)), output_path="output/coordinates.png"))]
+#[pyfunction(signature=(input_path, n, resize=Some((256, 256)), background_color="black", output_path="output/coordinates.png"))]
+/// Processes a color image into a sample of coordinate pixels
+///
+/// Arguments:
+///     input_path: str 
+///         path to source image
+///     n: u32
+///         number of pixels to select
+///     resize: (width: u32, height: u32)
+///         maximum dimensions by which to resize the image. Will not be resized to exactly those dimensions, but instead to fit within them. Defaults to width = 256, height = 256. Set to None to prevent resizing
+///     background_color: str
+///         color of the background pixels not sampled. Options are 'black' or 'white'. Defaults to 'black'
+///     output_path: str
+///         path where the output coordinates image will be saved. Note that, if the intermediate directories do not exist, they will be created. Defaults to 'output/coordinates.png'
 pub fn process_color_image(
     input_path: String, 
     n: u32, 
     resize: Option<(u32, u32)>,
+    background_color: &str,
     output_path: &str,
 ) -> PyResult<()> {
 
@@ -176,11 +190,18 @@ pub fn process_color_image(
         resize, 
     )?;
 
+    let background_color = match background_color {
+        "black" => BackgroundColor::Black,
+        "white" => BackgroundColor::White,
+        _ => BackgroundColor::Black,
+    };
+
     // 4. Turn the sampled coordinates back into an image
     let output_img = coordinates_to_color_image(
         coords_output.width(),
         coords_output.height(),
         &coords_output.coords(),
+        background_color,
     );
 
     // creating intermediate directories if necessary

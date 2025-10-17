@@ -34,7 +34,7 @@ Note that if the intermediary directories do not exist, they will be created aut
 The same process can be used for color images, using the process_color_image function: 
 
 ```python
-compare_color_images("MonaLisa.jpg", 10000, "output/monalisa.png", resize=(256, 256))
+compare_color_images("MonaLisa.jpg", 10000, "output/monalisa.png", resize=(256, 256), background_color='white')
 ```
 
 Note that because it is not separating foreground from background, the color processing function takes in fewer keyword arguments, and does not perform global thresholding: the visual appeal of output will depend largely on the input, with more colorful, low-detail images being more effectively preserved by the pointillistic effect.
