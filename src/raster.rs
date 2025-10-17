@@ -1,7 +1,7 @@
 use pyo3::{exceptions::PyValueError, prelude::*};
-use image::{GrayImage, Luma};
+use image::{GrayImage, Luma, RgbaImage};
 
-use crate::utils::Coordinate;
+use crate::{transformation::ColorCoordinate, utils::Coordinate};
 
 /// Creates a new black and white image from a list of coordinates.
 ///
@@ -35,6 +35,31 @@ pub fn coordinates_to_image(
 
     img
 }
+
+
+pub fn coordinates_to_color_image(
+    width: u32, 
+    height: u32, 
+    coords: &[ColorCoordinate]
+) -> RgbaImage {
+    // Create a new, all-black grayscale image buffer.
+    // `GrayImage` is a type alias for `ImageBuffer<Luma<u8>, Vec<u8>>`.
+    let mut img = RgbaImage::new(width, height);
+
+    // // Define the white pixel value. Luma<u8> has one channel from 0 to 255.
+    // let white_pixel = Luma([255u8]);
+
+    // Iterate through the coordinates and "paint" a white pixel at each location.
+    for coord in coords {
+        // A bounds check is good practice to prevent panics.
+        if coord.x() < width && coord.y() < height {
+            img.put_pixel(coord.x(), coord.y(), coord.color());
+        }
+    }
+
+    img
+}
+
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum SamplingType {

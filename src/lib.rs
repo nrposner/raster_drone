@@ -8,11 +8,11 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 use image::DynamicImage;
 
 use crate::{
-    raster::{coordinates_to_image, SamplingType}, 
-    sampling::{farthest_point_sampling, grid_sampling}, 
+    raster::{coordinates_to_color_image, coordinates_to_image, SamplingType}, 
+    sampling::{color_albedo_sampling, farthest_point_sampling, grid_sampling}, 
     thresholding::bradley_adaptive_threshold, 
-    transformation::{image_to_coordinates, ImgType}, 
-    utils::CoordinateOutput
+    transformation::{color_image_to_coordinates, image_to_coordinates, ImgType}, 
+    utils::{ColorCoordinateOutput, CoordinateOutput}
 };
 
 #[pyfunction(signature=(input_path, n, sample=SamplingType::Farthest, img_type=ImgType::BlackOnWhite, resize=Some((256, 256)), threshold=0.01, bradley=false, bradley_threshold=15, bradley_size=16, output_path="output/coordinates.png"))]
@@ -162,6 +162,70 @@ pub fn process_image_to_coordinates(
     )
 }
 
+#[pyfunction(signature=(input_path, n, resize=Some((256, 256)), output_path="output/coordinates.png"))]
+pub fn process_color_image(
+    input_path: String, 
+    n: u32, 
+    resize: Option<(u32, u32)>,
+    output_path: &str,
+) -> PyResult<()> {
+
+    let coords_output = process_color_image_to_coordinates(
+        input_path, 
+        n, 
+        resize, 
+    )?;
+
+    // 4. Turn the sampled coordinates back into an image
+    let output_img = coordinates_to_color_image(
+        coords_output.width(),
+        coords_output.height(),
+        &coords_output.coords(),
+    );
+
+    // creating intermediate directories if necessary
+    let path = std::path::Path::new(output_path);
+    if let Some(prefix) = path.parent() {
+        std::fs::create_dir_all(prefix).unwrap();
+    }
+
+    match output_img.save(output_path) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(PyValueError::new_err(format!("Unable to create file in path 'output/img.png': {}", e)))
+    }
+}
+
+pub fn process_color_image_to_coordinates(
+    input_path: String, 
+    n: u32, 
+    resize: Option<(u32, u32)>,
+) -> PyResult<ColorCoordinateOutput> {
+    let source_img = match image::open(input_path) {
+        Ok(img) => img,
+        Err(e) => {
+            return Err(PyValueError::new_err(format!("Error loading image: {:?}", e)))
+        }
+    };
+
+    let img = if let Some((width, height)) = resize {
+        source_img.thumbnail(width, height)
+    } else { source_img };
+
+    let width = img.width();
+    let height = img.height();
+
+    let initial_coords = color_image_to_coordinates(&img);
+
+    // sample colors
+    let sampled_coords = color_albedo_sampling(&initial_coords, n);
+
+    Ok(ColorCoordinateOutput::new(
+        sampled_coords,
+        width,
+        height,
+    ))
+}
+
 
 #[pyfunction(signature=(input_path, size, bradley_threshold=15, output_path="output/bradley.png"))]
 fn test_bradley(
@@ -194,6 +258,7 @@ fn test_bradley(
 #[pymodule]
 fn raster_drone(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(process_image, m)?)?;
+    m.add_function(wrap_pyfunction!(process_color_image, m)?)?;
     m.add_function(wrap_pyfunction!(process_image_to_coordinates, m)?)?;
     m.add_function(wrap_pyfunction!(test_bradley, m)?)?;
     Ok(())

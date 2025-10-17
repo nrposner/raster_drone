@@ -76,3 +76,64 @@ pub fn image_to_coordinates(img: &DynamicImage, percentile: f32, img_type: ImgTy
         .map(|(_brightness, coord)| coord)
         .collect()
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ColorCoordinate {
+    coord: Coordinate,
+    color: image::Rgba<u8>,
+    brightness: f32,
+}
+
+impl ColorCoordinate {
+    pub fn new(x: u32, y: u32, color: image::Rgba<u8>, brightness: f32) -> Self {
+        Self {
+            coord: Coordinate::new(x, y),
+            color,
+            brightness
+        }
+    }
+    pub fn x(&self) -> u32 {
+        self.coord.x()
+    }
+    pub fn y(&self) -> u32 {
+        self.coord.y()
+    }
+    pub fn color(&self) -> image::Rgba<u8> {
+        self.color
+    }
+    // since we only use it for comparison, it's more performant to use
+    // the square of euclidean distances, so that we avoid
+    // an expensive square root operation
+    pub fn distance_squared(&self, rhs: &Self) -> f64 {
+        let dx = self.x().abs_diff(rhs.x()) as f64;
+        let dy = self.y().abs_diff(rhs.y()) as f64;
+        // This is equivalent to dx.powi(2) + dy.powi(2)
+        dx.mul_add(dx, dy * dy)
+    }
+}
+
+// taking the albedo approach
+pub fn color_image_to_coordinates(img: &DynamicImage) -> Vec<ColorCoordinate> {
+    // This buffer will store tuples of (brightness, coordinate) for every pixel.
+    let mut pixel_brightness_data = Vec::new();
+
+    // The `pixels()` iterator gives us (x, y, Rgba<u8>) for each pixel.
+    for (x, y, pixel) in img.pixels() {
+        // `pixel` is Rgba([u8; 4]), where pixel.0 is the array [r, g, b, a].
+        let r = pixel[0] as f32;
+        let g = pixel[1] as f32;
+        let b = pixel[2] as f32;
+        let a = pixel[3] as f32;
+
+        // Apply the perceptually weighted luminance formula, multiplied by alpha.
+        let brightness = (0.299 * r + 0.587 * g + 0.114 * b) * (a / 255.0);
+
+        // We only care about pixels that have some brightness.
+        if brightness > 0.0 {
+            pixel_brightness_data.push(ColorCoordinate::new(x, y, pixel, brightness));
+        }
+    }
+
+    pixel_brightness_data
+}
+
