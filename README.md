@@ -30,3 +30,11 @@ rd.process_image("white_teacup.jpg", 100, img_type = 'white_on_black', output_pa
 The output image is saved to the output path. If the output path is not set, it will default to the 'output/img.png' path. 
 
 Note that if the intermediary directories do not exist, they will be created automatically.
+
+The same process can be used for color images, using the process_color_image function: 
+
+```python
+compare_color_images("MonaLisa.jpg", 10000, "output/monalisa.png", resize=(256, 256))
+```
+
+Note that because it is not separating foreground from background, the color processing function takes in fewer keyword arguments, and does not perform global thresholding: the visual appeal of output will depend largely on the input, with more colorful, low-detail images being more effectively preserved by the pointillistic effect.
