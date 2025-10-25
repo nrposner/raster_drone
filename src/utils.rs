@@ -27,6 +27,23 @@ impl Coordinate {
     }
 }
 
+/// Like a Coordinate except we're putting it in f64 instead for the purposes of exporting to
+/// Skybrush and normalizing
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ExportCoordinate([f64; 2]);
+
+impl ExportCoordinate {
+    pub fn new(x: f64, y: f64) -> Self {
+        Self([x, y])
+    }
+    pub fn x(&self) -> f64 {
+        self.0[0]
+    }
+    pub fn y(&self) -> f64 {
+        self.0[1]
+    }
+}
+
 #[derive(Clone)]
 #[pyclass(name="CoordinateOutput", module="raster_drone")]
 pub struct CoordinateOutput {

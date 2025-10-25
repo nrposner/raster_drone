@@ -1,6 +1,5 @@
 use pyo3::{exceptions::PyValueError, prelude::*};
 use image::{GrayImage, Luma, Rgba, RgbaImage};
-use wgpu::core::command::BakedCommands;
 
 use crate::{transformation::ColorCoordinate, utils::Coordinate};
 
