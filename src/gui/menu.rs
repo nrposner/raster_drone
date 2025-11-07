@@ -1,4 +1,4 @@
-use crate::{gui::app::AppState, transformation::ImgType, utils::ExportCoordinate};
+use crate::{gui::app::AppState, raster::SamplingType, transformation::ImgType, utils::ExportCoordinate};
 
 const FEET_TO_METERS: f64 = 0.3048;
 
@@ -316,6 +316,27 @@ pub fn populate_slider_menu(app_state: &mut AppState, ui: &mut egui::Ui) {
         &mut app_state.sampling_params.sample_count,
         1..=500
     ).text("Sample Count"));
+
+
+    egui::ComboBox::from_id_source("sampling type")
+        .selected_text(format!("{}", app_state.sampling_params.sampling_type))
+        .show_ui(ui, |ui| {
+            ui.selectable_value(
+                &mut app_state.sampling_params.sampling_type,
+                SamplingType::Farthest,
+                SamplingType::Farthest.to_string(),
+            );
+            ui.selectable_value(
+                &mut app_state.sampling_params.sampling_type,
+                SamplingType::Grid,
+                SamplingType::Grid.to_string(),
+            );
+            ui.selectable_value(
+                &mut app_state.sampling_params.sampling_type,
+                SamplingType::BlueNoise,
+                SamplingType::BlueNoise.to_string(),
+            );
+        });
     
     ui.separator();
 

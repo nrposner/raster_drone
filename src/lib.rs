@@ -2,14 +2,16 @@ mod raster;
 mod transformation;
 mod utils;
 mod sampling;
+mod sampling_3d;
 mod thresholding;
 
+use rand::{rngs::SmallRng, SeedableRng};
 use pyo3::{exceptions::PyValueError, prelude::*};
 use image::DynamicImage;
 
 use crate::{
     raster::{coordinates_to_color_image, coordinates_to_image, BackgroundColor, SamplingType}, 
-    sampling::{color_albedo_sampling, farthest_point_sampling, grid_sampling}, 
+    sampling::{color_albedo_sampling, farthest_point_sampling, grid_sampling, blue_noise_sampling}, 
     thresholding::bradley_adaptive_threshold, 
     transformation::{color_image_to_coordinates, image_to_coordinates, ImgType}, 
     utils::{ColorCoordinateOutput, CoordinateOutput}
@@ -56,7 +58,7 @@ pub fn process_image(
         threshold, 
         bradley, 
         bradley_threshold,
-        bradley_size
+        bradley_size,
     )?;
 
     // 4. Turn the sampled coordinates back into an image
@@ -112,6 +114,8 @@ pub fn process_image_to_coordinates(
 
 ) -> PyResult<CoordinateOutput> {
 
+    let mut rng = SmallRng::from_os_rng();
+
     let source_img = match image::open(input_path) {
         Ok(img) => img,
         Err(e) => {
@@ -148,6 +152,9 @@ pub fn process_image_to_coordinates(
         },
         SamplingType::Farthest => {
             farthest_point_sampling(&initial_coords, n)
+        }
+        SamplingType::BlueNoise => {
+            blue_noise_sampling(&initial_coords, n, 30, &mut rng)
         }
     };
 

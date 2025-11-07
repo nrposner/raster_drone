@@ -1,9 +1,10 @@
 use std::borrow::Cow;
+use rand::Rng;
 
 use image::{DynamicImage, GenericImageView};
 
 use crate::{
-    sampling::{farthest_point_sampling, grid_sampling}, 
+    sampling::{farthest_point_sampling, grid_sampling, blue_noise_sampling}, 
     thresholding::bradley_adaptive_threshold, 
     transformation::{image_to_coordinates, ImgType},
     raster::SamplingType,
@@ -36,14 +37,14 @@ impl Default for PreprocessingParams {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct SamplingParams {
     pub sample_count: u32,
-    sampling_type: SamplingType,
+    pub sampling_type: SamplingType,
 }
 
 impl Default for SamplingParams {
     fn default() -> Self {
         Self {
             sample_count: 30,
-            sampling_type: SamplingType::Farthest,
+            sampling_type: SamplingType::BlueNoise,
         }
     }
 }
@@ -96,6 +97,7 @@ pub fn run_preprocessing_stage<'a>(
 pub fn run_sampling_stage(
     params: &SamplingParams,
     intermediate_coords: Option<CoordinateOutput>,
+    rng: &mut impl Rng,
 ) -> Vec<Coordinate> {
     // println!("Rerunning CHEAP sampling stage...");
     // This is where you would apply your grid, farthest-point, etc., sampling
@@ -118,6 +120,9 @@ pub fn run_sampling_stage(
             },
             SamplingType::Grid => {
                 grid_sampling(&initial_coords, params.sample_count)
+            }
+            SamplingType::BlueNoise => {
+                blue_noise_sampling(&initial_coords, params.sample_count, 30, rng)
             }
         }
     }

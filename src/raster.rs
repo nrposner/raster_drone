@@ -81,6 +81,18 @@ pub fn coordinates_to_color_image(
 pub enum SamplingType {
     Grid,
     Farthest,
+    BlueNoise,
+}
+
+// Implement Display to show it nicely in the ComboBox
+impl std::fmt::Display for SamplingType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SamplingType::Grid => write!(f, "Grid"),
+            SamplingType::Farthest => write!(f, "Farthest"),
+            SamplingType::BlueNoise => write!(f, "Blue Noise"),
+        }
+    }
 }
 
 impl FromPyObject<'_> for SamplingType {
@@ -89,9 +101,10 @@ impl FromPyObject<'_> for SamplingType {
             match s.to_lowercase().as_str() {
                 "grid" => Ok(Self::Grid),
                 "farthest" => Ok(Self::Farthest),
+                "bluenoise" | "blue" | "blue_noise" => Ok(Self::BlueNoise),
                 _ => Err(
                     PyValueError::new_err(
-                        "The valid values for `sampling` include 'grid' and 'farthest'."
+                        "The valid values for `sampling` include 'grid', 'blue_noise' and 'farthest'."
                     )
                 )
             }

@@ -2505,6 +2505,7 @@ dependencies = [
  "image",
  "pollster 0.3.0",
  "pyo3",
+ "rand 0.9.2",
  "rfd",
  "wgpu",
 ]

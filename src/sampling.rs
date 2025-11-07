@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+use rand::Rng;
+
 use crate::transformation::ColorCoordinate;
 use crate::utils::Coordinate;
 use std::collections::HashMap;
@@ -178,7 +181,89 @@ pub fn color_albedo_sampling(pixels: &[ColorCoordinate], n: u32) -> Vec<ColorCoo
 }
 
 
+/// Experimenting with edge detection sampling
+pub fn edge_sampling() {}
 
+///Experimenting with blue noise sampling
+pub fn blue_noise_sampling(
+    pixels: &[Coordinate], 
+    n: u32,
+    k: usize, // default to 30
+    rng: &mut impl Rng,
+) -> Vec<Coordinate> {
 
+    let n = n as usize;
+    let m = pixels.len();
+
+    // --- Handle Edge Cases ---
+    if n == 0 || m == 0 {
+        return Vec::new();
+    }
+    // If we need to select all or more pixels than are available, just return a copy.
+    if n >= m {
+        return pixels.to_vec();
+    }
+
+    // We need a mutable list of available pixels to remove from.
+    let mut available_pixels = pixels.to_vec();
+    let mut selected_samples = Vec::with_capacity(n);
+
+    // 1. Add the first sample randomly.
+    let first_idx = rng.random_range(0..available_pixels.len());
+    selected_samples.push(available_pixels.swap_remove(first_idx));
+
+    // 2. Add the remaining n-1 samples.
+    for _ in 1..n {
+        if available_pixels.is_empty() {
+            // This should only happen if n > m, which is handled above,
+            // but it's good practice.
+            break;
+        }
+
+        let mut best_candidate_local_idx = 0; // Index in `available_pixels`
+        let mut max_min_dist_sq = -1.0; // Use -1.0 to ensure any 0.0 dist is >
+
+        // To avoid bias, we can either check all remaining points (slow, O(m*n^2))
+        // or check K candidates (fast, O(k*n^2)).
+        // We'll use a hybrid: if fewer than K points are left, check them all.
+        // Otherwise, sample K random candidates.
+
+        let num_to_check = k.min(available_pixels.len());
+
+        for i in 0..num_to_check {
+            // Pick a random candidate index from the available list.
+            // If we are checking all points (num_to_check == available_pixels.len()),
+            // this `local_idx` will just be `i`.
+            // Otherwise, it's a random index.
+            let local_idx = if num_to_check == available_pixels.len() {
+                i
+            } else {
+                rng.random_range(0..available_pixels.len())
+            };
+            
+            let candidate_pixel = &available_pixels[local_idx];
+
+            // Find the distance to the *nearest* already-selected sample.
+            let mut min_dist_sq = f64::MAX;
+            for selected in &selected_samples {
+                let dist = candidate_pixel.distance_squared(selected);
+                min_dist_sq = min_dist_sq.min(dist);
+            }
+
+            // If this candidate is farther from its nearest neighbor than
+            // any other candidate we've checked, it's our new best.
+            if min_dist_sq > max_min_dist_sq {
+                max_min_dist_sq = min_dist_sq;
+                best_candidate_local_idx = local_idx;
+            }
+        }
+
+        // 3. We've found our best candidate. Move it from available to selected.
+        let chosen_pixel = available_pixels.swap_remove(best_candidate_local_idx);
+        selected_samples.push(chosen_pixel);
+    }
+
+    selected_samples
+}
 
 

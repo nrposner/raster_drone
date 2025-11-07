@@ -5,6 +5,7 @@ use egui_winit::winit::{
     event_loop::EventLoop, 
     window::Window
 };
+use rand::{rngs::SmallRng, SeedableRng};
 use std::sync::Arc;
 use egui_wgpu::Renderer as EguiRenderer;
 use egui_winit::State as EguiState;
@@ -313,6 +314,8 @@ pub async fn run_app() {
         1,    // msaa_samples
     );
 
+    let mut rng = SmallRng::from_os_rng();
+
     // --- Event Loop ---
     event_loop.run(move |event, elwt| {
         match event {
@@ -416,7 +419,8 @@ pub async fn run_app() {
                             if force_resample || app_state.sampling_params != app_state.cached_sampling_params {
                                 app_state.final_light_coords = run_sampling_stage(
                                     &app_state.sampling_params, 
-                                    app_state.intermediate_coords.clone()
+                                    app_state.intermediate_coords.clone(),
+                                    &mut rng,
                                 );
                                 app_state.cached_sampling_params = app_state.sampling_params;
                             }
