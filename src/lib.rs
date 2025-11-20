@@ -4,10 +4,12 @@ mod utils;
 mod sampling;
 mod sampling_3d;
 mod thresholding;
+mod edge;
 
 use rand::{rngs::SmallRng, SeedableRng};
 use pyo3::{exceptions::PyValueError, prelude::*};
 use image::DynamicImage;
+use edge::test_edge;
 
 use crate::{
     raster::{coordinates_to_color_image, coordinates_to_image, BackgroundColor, SamplingType}, 
@@ -289,5 +291,6 @@ fn raster_drone(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(process_color_image, m)?)?;
     m.add_function(wrap_pyfunction!(process_image_to_coordinates, m)?)?;
     m.add_function(wrap_pyfunction!(test_bradley, m)?)?;
+    m.add_function(wrap_pyfunction!(test_edge, m)?)?;
     Ok(())
 }
