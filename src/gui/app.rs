@@ -12,8 +12,8 @@ use egui_winit::State as EguiState;
 
 use crate::{
     gui::{
-        menu::{populate_slider_menu, populate_upload_menu, ExportUnit}, 
-        pipeline::{run_preprocessing_stage, run_sampling_stage, PreprocessingParams, SamplingParams} 
+        menu::{ExportUnit, SavedCoordinates, populate_slider_menu, populate_upload_menu}, 
+        pipeline::{PreprocessingParams, SamplingParams, run_preprocessing_stage, run_sampling_stage} 
     }, 
     utils::{Coordinate, CoordinateOutput}};
 
@@ -254,6 +254,9 @@ pub struct AppState {
     pub intermediate_coords: Option<CoordinateOutput>,
     pub final_light_coords: Vec<Coordinate>,
 
+    // the saved coords
+    pub saved_light_coords: Option<Vec<SavedCoordinates>>,
+
     /// Toggles the visibility of the export settings panel
     pub show_export_panel: bool,
     /// Stores the raw string input for the export dimension
@@ -275,6 +278,8 @@ impl AppState {
             image: None,
             intermediate_coords: None,
             final_light_coords: Vec::new(),
+
+            saved_light_coords: None,
 
             show_export_panel: false,
             export_size_str: "20.0".to_string(), // Default to a sensible value
