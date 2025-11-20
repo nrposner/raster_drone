@@ -255,7 +255,13 @@ pub struct AppState {
     pub final_light_coords: Vec<Coordinate>,
 
     // the saved coords
-    pub saved_light_coords: Option<Vec<SavedCoordinates>>,
+    pub saved_light_coords: Vec<SavedCoordinates>,
+
+    pub show_name_popup: bool, 
+    /// The string buffer used to capture user input in the pop-up.
+    pub new_formation_name: String,
+    pub selected_formation_index: Option<usize>,
+
 
     /// Toggles the visibility of the export settings panel
     pub show_export_panel: bool,
@@ -265,6 +271,8 @@ pub struct AppState {
     pub export_unit: ExportUnit,
     /// Stores any error message from parsing the export size
     pub export_error_msg: Option<String>,
+
+
 }
 
 impl AppState {
@@ -279,7 +287,10 @@ impl AppState {
             intermediate_coords: None,
             final_light_coords: Vec::new(),
 
-            saved_light_coords: None,
+            saved_light_coords: vec![],
+            show_name_popup: false,
+            new_formation_name: "My New Formation".to_string(),
+            selected_formation_index: None,
 
             show_export_panel: false,
             export_size_str: "20.0".to_string(), // Default to a sensible value

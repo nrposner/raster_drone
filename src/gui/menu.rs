@@ -1,4 +1,5 @@
 use std::{fs::File, io::Write, path::Path};
+use egui::{self, Context}; // Ensure you have egui imported
 
 use rfd::FileDialog;
 
@@ -96,37 +97,60 @@ fn write_exports_to_directory(exports: &Vec<SavedExportCSV>, dir_path: &Path) ->
 // saving a formation in preparation to make more
 // inefficient as currently writte, but I'm not worried here
 // the clones are fine
+
 pub fn ui_save_coordinates_button(ui: &mut egui::Ui, app_state: &mut AppState) {
-
     if ui.button("Save Coordinates").clicked() {
-        // name popup?
-        let placeholder = "Placeholder";
+        // 1. Reset the temporary name buffer and flag the pop-up to show
+        app_state.new_formation_name = "My New Formation".to_string(); 
+        app_state.show_name_popup = true;
+    }
+    
+    // 2. Render the pop-up (See section 2.2)
+    show_name_popup(ui.ctx(), app_state);
+}
 
-        // saving the values
-        let saved = match &app_state.saved_light_coords {
-            Some(vec) => {
 
-                let new_saved = SavedCoordinates {
-                    coords: app_state.final_light_coords.clone(), 
-                    color: app_state.visual_params.light_color,
-                    name: placeholder.to_string(),
-                };
-                vec.clone().push(new_saved);
-                vec
-            },
-            None => {
-                let new_saved = SavedCoordinates {
-                    coords: app_state.final_light_coords.clone(), 
-                    color: app_state.visual_params.light_color,
-                    name: placeholder.to_string(),
-                };
-                &vec![new_saved]
-            }
-        };
+fn show_name_popup(ctx: &Context, app_state: &mut AppState) {
+    // Only show the window if the state is set to true
+    if app_state.show_name_popup {
+        egui::Window::new("Name Your Formation")
+            .collapsible(false)
+            .resizable(false)
+            .pivot(egui::Align2::CENTER_CENTER) // Center the pop-up
+            .show(ctx, |ui| {
+                // Input field for the name
+                ui.horizontal(|h_ui| {
+                    h_ui.label("Name:");
+                    h_ui.text_edit_singleline(&mut app_state.new_formation_name)
+                        .request_focus(); // Automatically focus the text box
+                });
 
-        app_state.saved_light_coords = Some(saved.to_vec());
+                ui.separator();
+
+                ui.horizontal(|h_ui| {
+                    // --- SAVE BUTTON ---
+                    if h_ui.button("Save").clicked() {
+                        // 1. Perform the save operation with the user's input
+                        let new_saved = SavedCoordinates {
+                            coords: app_state.final_light_coords.clone(), 
+                            color: app_state.visual_params.light_color,
+                            name: app_state.new_formation_name.drain(..).collect(),
+                        };
+                        app_state.saved_light_coords.push(new_saved);
+                        
+                        // 2. Close the pop-up
+                        app_state.show_name_popup = false;
+                    }
+                    
+                    // --- CANCEL BUTTON ---
+                    if h_ui.button("Cancel").clicked() {
+                        app_state.show_name_popup = false;
+                    }
+                });
+            });
     }
 }
+
 
 
 /// Helper function defining the button that exports the current coordinates as a static CSV
@@ -212,132 +236,125 @@ pub fn ui_export_coordinates_button(ui: &mut egui::Ui, app_state: &mut AppState)
                     // we're now going to run this once for every set of coordinates we saved
                     
                     // one clone up front, not in a loop
-                    let all_coords_opt = app_state.saved_light_coords.clone();
-                    if let Some(all_coords) = all_coords_opt {
-                        let normalized_cords: Vec<Result<SavedExportCoordinates, String>> = all_coords.into_iter().map(|coordinates| {
+                    let all_coords = app_state.saved_light_coords.clone();
+                    let normalized_cords: Vec<Result<SavedExportCoordinates, String>> = all_coords.into_iter().map(|coordinates| {
 
-                            // --- Fix for fold initialization ---
-                            // Initialize with the first coordinate's values
-                            let first = coordinates.coords[0];
-                            let (min_x, max_x, min_y, max_y) = coordinates.coords.iter().skip(1).fold(
-                                (first.x(), first.x(), first.y(), first.y()),
-                                |mut acc, coord| {
-                                    let x = coord.x();
-                                    let y = coord.y();
-                                    if x < acc.0 { acc.0 = x; }
-                                    if x > acc.1 { acc.1 = x; }
-                                    if y < acc.2 { acc.2 = y; }
-                                    if y > acc.3 { acc.3 = y; }
-                                    acc
-                                },
-                            );
+                        // --- Fix for fold initialization ---
+                        // Initialize with the first coordinate's values
+                        let first = coordinates.coords[0];
+                        let (min_x, max_x, min_y, max_y) = coordinates.coords.iter().skip(1).fold(
+                            (first.x(), first.x(), first.y(), first.y()),
+                            |mut acc, coord| {
+                                let x = coord.x();
+                                let y = coord.y();
+                                if x < acc.0 { acc.0 = x; }
+                                if x > acc.1 { acc.1 = x; }
+                                if y < acc.2 { acc.2 = y; }
+                                if y > acc.3 { acc.3 = y; }
+                                acc
+                            },
+                        );
 
-                            let x_space = max_x - min_x;
-                            let y_space = max_y - min_y;
-                            let max_range = x_space.max(y_space);
+                        let x_space = max_x - min_x;
+                        let y_space = max_y - min_y;
+                        let max_range = x_space.max(y_space);
 
-                            // Handle edge case where all points are identical
-                            if max_range == 0 {
-                                app_state.export_error_msg = Some("All coordinates are identical".to_string());
-                                Err(format!("The {} formation has only identical coordinates", coordinates.name))
-                            } else {
-                                let scale_factor = 1.0 / max_range as f64;
-                                let new_width = x_space as f64 * scale_factor;
-                                let new_height = y_space as f64 * scale_factor;
-                                let offset_x = (1.0 - new_width) / 2.0;
-                                let offset_y = (1.0 - new_height) / 2.0;
+                        // Handle edge case where all points are identical
+                        if max_range == 0 {
+                            app_state.export_error_msg = Some("All coordinates are identical".to_string());
+                            Err(format!("The {} formation has only identical coordinates", coordinates.name))
+                        } else {
+                            let scale_factor = 1.0 / max_range as f64;
+                            let new_width = x_space as f64 * scale_factor;
+                            let new_height = y_space as f64 * scale_factor;
+                            let offset_x = (1.0 - new_width) / 2.0;
+                            let offset_y = (1.0 - new_height) / 2.0;
 
-                                let normalized_coordinates: Vec<ExportCoordinate> = coordinates.coords
-                                    .iter()
-                                    .map(|coord| {
-                                        let normalized_x = (coord.x() as f64 - min_x as f64) * scale_factor + offset_x;
-                                        // Flip y-axis (1.0 - ...)
-                                        let normalized_y = 1.0 - ((coord.y() as f64 - min_y as f64) * scale_factor + offset_y);
+                            let normalized_coordinates: Vec<ExportCoordinate> = coordinates.coords
+                                .iter()
+                                .map(|coord| {
+                                    let normalized_x = (coord.x() as f64 - min_x as f64) * scale_factor + offset_x;
+                                    // Flip y-axis (1.0 - ...)
+                                    let normalized_y = 1.0 - ((coord.y() as f64 - min_y as f64) * scale_factor + offset_y);
 
-                                        // Scale to the final desired dimension
-                                        let new_x = normalized_x * max_dim_meters;
-                                        let new_y = normalized_y * max_dim_meters;
+                                    // Scale to the final desired dimension
+                                    let new_x = normalized_x * max_dim_meters;
+                                    let new_y = normalized_y * max_dim_meters;
 
-                                        ExportCoordinate::new(new_x, new_y)
-                                    }).collect();
+                                    ExportCoordinate::new(new_x, new_y)
+                                }).collect();
 
-                                Ok(SavedExportCoordinates {
-                                    coords: normalized_coordinates,
-                                    color: coordinates.color,
-                                    name: coordinates.name,
-                                })
-                            }
-                        }).collect();
+                            Ok(SavedExportCoordinates {
+                                coords: normalized_coordinates,
+                                color: coordinates.color,
+                                name: coordinates.name,
+                            })
+                        }
+                    }).collect();
 
-                        // TODO: and then, we create the new set of CSVs and put them all into a file
-                    
+                    // TODO: and then, we create the new set of CSVs and put them all into a file
+                
 
-                        let all_csvs: Vec<SavedExportCSV> = normalized_cords.iter().map(|coords| {
-                            // we create a different one of these CSVs per set of coordinates
+                    let all_csvs: Vec<SavedExportCSV> = normalized_cords.iter().map(|coords| {
+                        // we create a different one of these CSVs per set of coordinates
 
-                            // --- C. Create the CSV data in memory ---
-                            let mut wtr = csv::Writer::from_writer(vec![]);
-                            // these need to be converted into u8, normalized on 1
+                        // --- C. Create the CSV data in memory ---
+                        let mut wtr = csv::Writer::from_writer(vec![]);
+                        // these need to be converted into u8, normalized on 1
 
-                            // Write header 
-                            wtr.write_record([ 
-                                "Name", "x_m", "y_m", "z_m", "Red", "Green", "Blue" 
-                            ]).unwrap(); // Handle error
+                        // Write header 
+                        wtr.write_record([ 
+                            "Name", "x_m", "y_m", "z_m", "Red", "Green", "Blue" 
+                        ]).unwrap(); // Handle error
 
-                            // a bit messy, we're doing unrelated mutation and return
-                            // crutcher would kill me
-                            let formation_name = match coords {
-                                Ok(valid_coords) => {
-                                    // getting colors
-                                    let [red, green, blue] = valid_coords.color;
-                                    let red_u8 = (red * 255f32) as u8;
-                                    let green_u8 = (green * 255f32) as u8;
-                                    let blue_u8 = (blue * 255f32) as u8;
+                        // a bit messy, we're doing unrelated mutation and return
+                        // crutcher would kill me
+                        let formation_name = match coords {
+                            Ok(valid_coords) => {
+                                // getting colors
+                                let [red, green, blue] = valid_coords.color;
+                                let red_u8 = (red * 255f32) as u8;
+                                let green_u8 = (green * 255f32) as u8;
+                                let blue_u8 = (blue * 255f32) as u8;
 
-                                    for (count, coord) in valid_coords.coords.iter().enumerate() {
-                                        wtr.write_record(&[
-                                            format!("Drone{}", count+1),
-                                             String::from("0.0"),
-                                             coord.x().to_string(),
-                                             coord.y().to_string(),
-                                             red_u8.to_string(),
-                                             green_u8.to_string(),
-                                             blue_u8.to_string(), 
-                                        ]).unwrap(); // todo: Handle error
-                                    }
-                                    Some(valid_coords.name.clone())
-                                },
-                                Err(_) => None, 
-                            };
-
-                            let csv_data = if let Some(valid_name) = formation_name {
-
-                                // Get the CSV data as bytes
-                                match wtr.into_inner() {
-                                    Ok(data) => Ok(SavedExportCSV {csv: data, name: valid_name}),
-                                    Err(e) => {
-                                        app_state.export_error_msg = Some(format!("Formation: {} failed to save", valid_name));
-                                        Err(e.to_string())
-                                    }
+                                for (count, coord) in valid_coords.coords.iter().enumerate() {
+                                    wtr.write_record(&[
+                                        format!("Drone{}", count+1),
+                                         String::from("0.0"),
+                                         coord.x().to_string(),
+                                         coord.y().to_string(),
+                                         red_u8.to_string(),
+                                         green_u8.to_string(),
+                                         blue_u8.to_string(), 
+                                    ]).unwrap(); // todo: Handle error
                                 }
-                            } else { Err("Bla".to_string()) };
+                                Some(valid_coords.name.clone())
+                            },
+                            Err(_) => None, 
+                        };
 
-                            csv_data
+                        let csv_data = if let Some(valid_name) = formation_name {
 
-                            // filter out all the empty ones
-                        }).filter_map(|v| v.ok() ).collect();
+                            // Get the CSV data as bytes
+                            match wtr.into_inner() {
+                                Ok(data) => Ok(SavedExportCSV {csv: data, name: valid_name}),
+                                Err(e) => {
+                                    app_state.export_error_msg = Some(format!("Formation: {} failed to save", valid_name));
+                                    Err(e.to_string())
+                                }
+                            }
+                        } else { Err("Bla".to_string()) };
+
+                        csv_data
+
+                        // filter out all the empty ones
+                    }).filter_map(|v| v.ok() ).collect();
 
 
-                        // at this point, we move in the file dialog to save all of them
+                    // at this point, we move in the file dialog to save all of them
 
-                        // TODO: ignoring result at present
-                        let _ = save_multiple_csvs(all_csvs);
-
-                    } else {
-                         app_state.export_error_msg = Some("Save some coordinates before exporting!".to_string());
-                         return;
-                    }
-
+                    // TODO: ignoring result at present
+                    let _ = save_multiple_csvs(all_csvs);
                 } // End "Confirm" button
 
                 // --- The "Cancel" button ---
@@ -496,6 +513,36 @@ pub fn populate_slider_menu(app_state: &mut AppState, ui: &mut egui::Ui) {
 
     ui.heading("Save");
     ui_save_coordinates_button(ui, app_state);
+
+    // add show the names of saved formations
+    egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+    // Iterate through the collection of saved formations
+    for (index, saved) in app_state.saved_light_coords.iter().enumerate() {
+        // Create a selectable button for each name
+        let is_selected = app_state.selected_formation_index == Some(index);
+        
+        let response = ui.selectable_label(is_selected, &saved.name);
+
+        if response.clicked() {
+            // Toggle selection logic:
+            if is_selected {
+                // Deselect if already active
+                app_state.selected_formation_index = None;
+            } else {
+                // Select the new formation
+                app_state.selected_formation_index = Some(index);
+                
+                // OPTIONAL: Immediately load the coordinates/visuals of the selected formation
+                // If you want the selection to activate the visuals, uncomment:
+                // app_state.final_light_coords = saved.coords.clone();
+                // app_state.visual_params.light_color = saved.color;
+                // ... and ensure the rendering pipeline uses final_light_coords
+            }
+        }
+    }
+});
+    
+
     ui.heading("Export");
     ui_export_coordinates_button(ui, app_state);
 }
