@@ -531,12 +531,12 @@ pub fn populate_slider_menu(app_state: &mut AppState, ui: &mut egui::Ui) {
             } else {
                 // Select the new formation
                 app_state.selected_formation_index = Some(index);
-                
-                // OPTIONAL: Immediately load the coordinates/visuals of the selected formation
-                // If you want the selection to activate the visuals, uncomment:
+
+                // TODO: load the coordinates of the selected one
                 // app_state.final_light_coords = saved.coords.clone();
                 // app_state.visual_params.light_color = saved.color;
-                // ... and ensure the rendering pipeline uses final_light_coords
+
+                // switches, but buggy, winds up switching back to the wrong one
             }
         }
     }
