@@ -70,3 +70,6 @@ docs/_build/
 
 # Pyenv
 .python-version
+.ipynb_checkpoints/hw3-checkpoint.ipynb
+python/.ipynb_checkpoints/test_raster-checkpoint.ipynb
+python
