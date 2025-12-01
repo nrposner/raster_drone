@@ -849,6 +849,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "edge-detection"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55df5eef5d0e6f1326702c062e393438c408b87399c30d2b2ab09197cc638d9c"
+dependencies = [
+ "image",
+ "rayon",
+]
+
+[[package]]
 name = "egui"
 version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2499,6 +2509,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "csv",
+ "edge-detection",
  "egui",
  "egui-wgpu",
  "egui-winit",
