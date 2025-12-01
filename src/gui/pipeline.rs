@@ -99,10 +99,6 @@ pub fn run_sampling_stage(
     intermediate_coords: Option<CoordinateOutput>,
     rng: &mut impl Rng,
 ) -> Vec<Coordinate> {
-    // println!("Rerunning CHEAP sampling stage...");
-    // This is where you would apply your grid, farthest-point, etc., sampling
-    // algorithm to the `intermediate_coords`.
-
     let initial_coords = if let Some(coords) = intermediate_coords {
         coords.coords()
     } else {
